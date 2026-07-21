@@ -4,7 +4,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
 from app.models.job_posting import JobLanguage, JobPosting, JobRegion
-from app.schemas.job import IngestResultOut, JobPostingList, JobPostingOut
+from app.schemas.job import EnrichResultOut, IngestResultOut, JobPostingList, JobPostingOut
+from app.services.enrichment.pipeline import enrich_pending_jobs
 from app.services.ingestion.remoteok import RemoteOkAdapter
 from app.services.ingestion.runner import ingest_source
 
@@ -50,3 +51,12 @@ async def list_jobs(
 async def trigger_remoteok_ingestion(db: AsyncSession = Depends(get_db)) -> IngestResultOut:
     result = await ingest_source(db, RemoteOkAdapter())
     return IngestResultOut(**result.__dict__)
+
+
+@router.post("/enrich", response_model=EnrichResultOut)
+async def trigger_enrichment(
+    db: AsyncSession = Depends(get_db),
+    limit: int | None = Query(default=None, ge=1, le=100),
+) -> EnrichResultOut:
+    result = await enrich_pending_jobs(db, limit=limit)
+    return EnrichResultOut(**result.__dict__)

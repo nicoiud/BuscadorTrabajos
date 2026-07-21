@@ -9,7 +9,6 @@ from sqlalchemy import (
     DateTime,
     Enum,
     ForeignKey,
-    LargeBinary,
     String,
     Text,
     UniqueConstraint,
@@ -19,7 +18,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
 
-EMBEDDING_DIM = 1024  # voyage-2 embedding size
+EMBEDDING_DIM = 1024  # voyage-3 embedding size
 
 
 class JobLanguage(str, enum.Enum):
@@ -89,8 +88,10 @@ class JobPosting(Base):
     currency: Mapped[str | None] = mapped_column(String(8), nullable=True)
     requirements: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # SQLite has no pgvector extension; tests store the same list[float] as JSON so
+    # enrichment persistence is still exercised without a real Postgres.
     embedding: Mapped[list[float] | None] = mapped_column(
-        Vector(EMBEDDING_DIM).with_variant(LargeBinary(), "sqlite"), nullable=True
+        Vector(EMBEDDING_DIM).with_variant(JSON(), "sqlite"), nullable=True
     )
     enrichment_status: Mapped[EnrichmentStatus] = mapped_column(
         Enum(EnrichmentStatus, name="enrichment_status"),

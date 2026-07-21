@@ -13,5 +13,11 @@ class Settings(BaseSettings):
     scraper_user_agent: str = "BuscadorTrabajosBot/0.1 (+contact@example.com)"
     scraper_default_delay_seconds: float = 3.0
 
+    anthropic_api_key: str = ""
+    voyage_api_key: str = ""
+    claude_model: str = "claude-sonnet-5"
+    voyage_model: str = "voyage-3"
+    enrichment_batch_size: int = 20
+
 
 settings = Settings()

@@ -3,7 +3,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict
 
-from app.models.job_posting import JobLanguage, JobRegion
+from app.models.job_posting import EnrichmentStatus, JobLanguage, JobRegion, Modality, Seniority
 
 
 class JobPostingOut(BaseModel):
@@ -19,6 +19,18 @@ class JobPostingOut(BaseModel):
     language: JobLanguage
     region: JobRegion
 
+    # Campos IA — null hasta que corre el enrichment (Fase 2).
+    title_normalized: str | None = None
+    company_normalized: str | None = None
+    seniority: Seniority | None = None
+    modality: Modality | None = None
+    salary_min: int | None = None
+    salary_max: int | None = None
+    currency: str | None = None
+    requirements: list[str] | None = None
+    summary: str | None = None
+    enrichment_status: EnrichmentStatus
+
 
 class JobPostingList(BaseModel):
     total: int
@@ -30,3 +42,14 @@ class IngestResultOut(BaseModel):
     fetched: int
     created: int
     updated: int
+
+
+class EnrichResultOut(BaseModel):
+    processed: int
+    enriched: int
+    failed: int
+
+
+class SemanticSearchRequest(BaseModel):
+    query: str
+    limit: int = 20

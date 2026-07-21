@@ -8,6 +8,17 @@ export interface JobPosting {
   posted_at: string | null;
   language: "es" | "en";
   region: "latam" | "remote_intl" | "other";
+
+  title_normalized: string | null;
+  company_normalized: string | null;
+  seniority: "junior" | "mid" | "senior" | "lead" | "exec" | null;
+  modality: "remote" | "hybrid" | "onsite" | null;
+  salary_min: number | null;
+  salary_max: number | null;
+  currency: string | null;
+  requirements: string[] | null;
+  summary: string | null;
+  enrichment_status: "pending" | "done" | "failed";
 }
 
 export interface JobPostingList {
@@ -20,6 +31,12 @@ export interface IngestResult {
   fetched: number;
   created: number;
   updated: number;
+}
+
+export interface EnrichResult {
+  processed: number;
+  enriched: number;
+  failed: number;
 }
 
 const API_BASE = "/api/v1";
@@ -35,10 +52,30 @@ export async function fetchJobs(query: string): Promise<JobPostingList> {
   return response.json();
 }
 
+export async function semanticSearchJobs(query: string, limit = 20): Promise<JobPostingList> {
+  const response = await fetch(`${API_BASE}/search`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ query, limit }),
+  });
+  if (!response.ok) {
+    throw new Error(`Error en la búsqueda semántica: ${response.status}`);
+  }
+  return response.json();
+}
+
 export async function triggerRemoteOkIngestion(): Promise<IngestResult> {
   const response = await fetch(`${API_BASE}/jobs/ingest/remoteok`, { method: "POST" });
   if (!response.ok) {
     throw new Error(`Error al disparar la ingestion: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function triggerEnrichment(): Promise<EnrichResult> {
+  const response = await fetch(`${API_BASE}/jobs/enrich`, { method: "POST" });
+  if (!response.ok) {
+    throw new Error(`Error al disparar el enrichment: ${response.status}`);
   }
   return response.json();
 }

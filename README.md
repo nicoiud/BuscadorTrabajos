@@ -7,9 +7,11 @@ automáticamente.
 
 ## Estado actual
 
-MVP en construcción por fases (ver plan de arquitectura). Fase 1 en curso: ingestion de
-una fuente (RemoteOK), almacenamiento en Postgres, y búsqueda básica por API + UI.
-Todavía no hay IA, autenticación ni scheduler — eso llega en fases siguientes.
+MVP en construcción por fases (ver plan de arquitectura). Completas: **Fase 1**
+(ingestion de RemoteOK, almacenamiento en Postgres, búsqueda por keyword) y **Fase 2**
+(normalización de avisos con Claude + embeddings con Voyage AI + búsqueda semántica).
+Todavía no hay autenticación, más fuentes, ni scheduler — eso llega en fases
+siguientes. Ver `PROGRESS.md` para el detalle de qué se construyó y qué falta.
 
 ## Arquitectura
 
@@ -31,7 +33,7 @@ Ver `CLAUDE.md` para las convenciones del repo y detalle de cada capa.
 
 ## Quickstart
 
-Requisitos: Docker, Python 3.12+, Node 20+.
+Requisitos: Docker, Python 3.11+, Node 20+.
 
 ```bash
 # 1. Base de datos (Postgres + pgvector)
@@ -39,27 +41,49 @@ docker compose up -d
 
 # 2. Backend
 cd backend
-cp ../.env.example .env   # completar valores si hace falta
+cp ../.env.example .env
+# completar ANTHROPIC_API_KEY y VOYAGE_API_KEY en .env para que el enrichment y la
+# búsqueda semántica funcionen (ver "Variables de entorno" abajo)
 pip install -e ".[dev]"
 alembic upgrade head
 uvicorn app.main:app --reload --app-dir src
 
-# 3. Disparar la ingestion de RemoteOK (en otra terminal)
+# 3. Traer ofertas reales de RemoteOK (en otra terminal)
 curl -X POST http://localhost:8000/api/v1/jobs/ingest/remoteok
 
-# 4. Ver resultados
+# 4. Normalizarlas con IA (título/empresa limpios, seniority, modalidad, salario,
+#    resumen, requirements) y generar sus embeddings
+curl -X POST http://localhost:8000/api/v1/jobs/enrich
+
+# 5. Buscar por keyword...
 curl "http://localhost:8000/api/v1/jobs?q=python"
 
-# 5. Frontend
+# ...o por lenguaje natural (requiere que el paso 4 ya haya corrido)
+curl -X POST http://localhost:8000/api/v1/search \
+  -H "Content-Type: application/json" \
+  -d '{"query": "trabajo remoto de backend en Python, senior", "limit": 10}'
+
+# 6. Frontend
 cd ../frontend
 npm install
 npm run dev
 ```
 
+Con el frontend corriendo (`http://localhost:5173`), los botones "Actualizar ofertas"
+y "Analizar con IA" disparan los pasos 3 y 4 desde la UI, y el toggle
+"Palabra clave" / "Búsqueda con IA" alterna entre los pasos 4 y 5.
+
 ## Variables de entorno
 
-Ver `.env.example` para la lista completa (base de datos, claves de IA, APIs de
-fuentes, notificaciones). Solo `DATABASE_URL` es necesaria para la Fase 1.
+Ver `.env.example` para la lista completa. Para Fase 1 alcanza con `DATABASE_URL`. A
+partir de Fase 2, `POST /jobs/enrich` y `POST /search` necesitan:
+
+- `ANTHROPIC_API_KEY` — para normalizar avisos (título/empresa/seniority/modalidad/
+  salario/requirements/resumen).
+- `VOYAGE_API_KEY` — para generar los embeddings usados en la búsqueda semántica.
+
+Sin esas claves esos dos endpoints devuelven error 500 (el resto de la app funciona
+igual — ingestion y búsqueda por keyword no dependen de IA).
 
 ## Tests
 
@@ -67,3 +91,7 @@ fuentes, notificaciones). Solo `DATABASE_URL` es necesaria para la Fase 1.
 cd backend
 pytest
 ```
+
+Los tests nunca llaman a Claude/Voyage/RemoteOK reales — todo mockeado
+(`respx` para HTTP, stubs para los clientes `anthropic`/`voyageai`). No hace falta
+ninguna API key para correr la suite.

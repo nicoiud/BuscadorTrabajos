@@ -1,4 +1,4 @@
-# Progreso — BuscadorTrabajos (Fase 1)
+# Progreso — BuscadorTrabajos (Fase 1 + Fase 2)
 
 Este archivo resume qué se construyó hasta ahora, el estado real (qué corre y qué no
 se pudo verificar en este entorno), y qué sigue. Es un registro de trabajo, no
@@ -33,7 +33,8 @@ original; convenciones de código en `CLAUDE.md`; quickstart en `README.md`.
   - Tipos elegidos cross-dialect (`sa.Uuid`, `sa.JSON` con variante `JSONB` en
     postgres) para que el mismo modelo sirva en tests con SQLite y en producción con
     Postgres+pgvector; el único tipo con variante especial es `embedding`
-    (`Vector` en postgres, `LargeBinary` en sqlite, ya que sqlite no tiene pgvector).
+    (`Vector` en postgres, `JSON` en sqlite — sqlite no tiene pgvector, pero así los
+    tests igual pueden persistir y leer el `list[float]` real, no solo mockearlo).
 - **Alembic**: `alembic.ini`, `alembic/env.py` (async, lee `DATABASE_URL` de settings),
   migración inicial `alembic/versions/0001_initial_schema.py` (crea extensión
   `vector`, tablas `sources` y `job_postings` con sus enums). Escrita a mano porque no
@@ -59,7 +60,39 @@ original; convenciones de código en `CLAUDE.md`; quickstart en `README.md`.
 - Verificado con imports reales (venv creado, deps instaladas, `alembic history` OK,
   `app.openapi()` muestra las 3 rutas registradas correctamente).
 
-### Tests (backend) — 9/9 pasando
+### Pipeline de IA — Fase 2 (`src/app/services/enrichment/`, `services/search/`)
+- `core/config.py` — `anthropic_api_key`, `voyage_api_key`, `claude_model`
+  (`claude-sonnet-5`), `voyage_model` (`voyage-3`), `enrichment_batch_size`.
+- `enrichment/extractor.py` — `extract_job_fields(title, company, description)` llama
+  a Claude **forzando un tool call** (`tool_choice`) con un JSON schema de
+  `record_job_extraction` (title_normalized, company_normalized, seniority, modality,
+  salary_min/max, currency, requirements, summary). Se eligió tool-use en vez de pedir
+  JSON en texto libre porque el schema queda validado por el propio modelo, no por un
+  parser frágil después. `get_client()` es una función separada (no un cliente global)
+  para poder mockearla fácil en tests sin tocar variables de entorno.
+- `enrichment/embeddings.py` — `embed_documents()` (batch, `input_type="document"`)
+  para avisos y `embed_query()` (`input_type="query"`) para búsquedas — Voyage separa
+  ambos modos porque el embedding de una query corta y el de un documento largo no son
+  simétricos.
+- `enrichment/pipeline.py` — `enrich_pending_jobs(db, limit)`: toma hasta `limit` avisos
+  con `enrichment_status=pending`, extrae campos con Claude, y **solo si la extracción
+  fue exitosa** arma el batch de embeddings (un solo call a Voyage para todos los
+  avisos del lote, no uno por aviso). Si `extract_job_fields` tira `ExtractionError`
+  para un aviso puntual, ese aviso queda `enrichment_status=failed` y el resto del lote
+  sigue procesándose — un aviso raro no rompe el batch entero.
+- `services/search/semantic.py` — `semantic_search(db, query_embedding, limit)` usa
+  `JobPosting.embedding.cosine_distance(...)` (pgvector) para rankear; solo considera
+  avisos `is_active` y `enrichment_status=done` (no tiene sentido rankear por embedding
+  algo que todavía no tiene uno).
+- **API**: `POST /jobs/enrich` (dispara el pipeline manualmente, `limit` opcional) y
+  `POST /search` (body `{query, limit}`, embebe la query y devuelve avisos rankeados).
+  Registrados en `main.py`.
+- Decisión consciente vs. el plan original: para tener un MVP demostrable hoy se usa la
+  **Messages API síncrona** en batches chicos (no la Batches API async al 50% de costo
+  que menciona el plan de arquitectura) — queda anotado como optimización de costo
+  pendiente para cuando el volumen lo justifique, no es una limitación técnica.
+
+### Tests (backend) — 20/20 pasando
 - `tests/conftest.py` — fixtures: `db_session` (SQLite in-memory async + `StaticPool`,
   crea todas las tablas), `client` (AsyncClient contra la app con `get_db` sobreescrito),
   `remoteok_api_fixture` (payload de ejemplo de la API de RemoteOK).
@@ -69,20 +102,36 @@ original; convenciones de código en `CLAUDE.md`; quickstart en `README.md`.
 - `tests/test_ingestion/test_runner.py` (3 tests) — `ingest_source` crea filas en la
   primera corrida, **es idempotente en la segunda** (`created=0`, sin duplicados por
   `(source_id, external_id)`), y actualiza campos cuando cambian en el origen.
-- `tests/test_api/test_jobs.py` (4 tests) — `GET /jobs` vacío, ingestion mockeada +
-  `GET /jobs` devuelve resultados, filtro por `q`, validación 422 en `limit` inválido.
-- Corrida completa: `pytest tests/` → **9 passed**.
+- `tests/test_api/test_jobs.py` (5 tests) — `GET /jobs` vacío, ingestion mockeada +
+  `GET /jobs` devuelve resultados, filtro por `q`, validación 422 en `limit` inválido,
+  y `POST /jobs/enrich` con el pipeline mockeado.
+- `tests/test_api/test_search.py` (1 test) — `POST /search` con `embed_query` y
+  `semantic_search` mockeados, verifica que la query se embebe y el resultado se
+  serializa bien.
+- `tests/test_services/test_extractor.py` (3 tests) — parseo de la respuesta tool-use
+  de Claude (mock de `AsyncAnthropic`, sin red real), y dos casos de error
+  (`ExtractionError` cuando no hay tool_use block o falta un campo requerido).
+- `tests/test_services/test_embeddings.py` (3 tests) — `embed_documents`/`embed_query`
+  contra un fake client de Voyage, y que una lista vacía no dispara ningún call a la API.
+- `tests/test_services/test_enrichment_pipeline.py` (3 tests) — pipeline completo
+  contra sqlite real: enrichment exitoso persiste campos + embedding, extracción fallida
+  marca `failed` sin tocar embeddings, y no-op cuando no hay nada pendiente.
+- Corrida completa: `pytest tests/` → **20 passed**.
 
 ### Frontend (`frontend/`)
 - Vite + React 18 + TypeScript + Tailwind, armado a mano (sin scaffolder interactivo).
-- `src/api/jobs.ts` — cliente tipado (`fetchJobs`, `triggerRemoteOkIngestion`) contra
-  `/api/v1`, proxyado a `localhost:8000` vía `vite.config.ts`.
-- `src/hooks/useJobs.ts` — React Query (`useJobs`, `useTriggerIngestion` con
-  invalidación de cache).
-- `src/components/JobCard.tsx`, `src/pages/JobSearch.tsx` — buscador por keyword +
-  botón "Actualizar ofertas" que dispara la ingestion y refresca la lista.
-- `npm install` (138 paquetes, 0 vulnerabilidades) y `npm run build` (`tsc -b && vite
-  build`) — **compilan sin errores**.
+- `src/api/jobs.ts` — cliente tipado (`fetchJobs`, `semanticSearchJobs`,
+  `triggerRemoteOkIngestion`, `triggerEnrichment`) contra `/api/v1`, proxyado a
+  `localhost:8000` vía `vite.config.ts`.
+- `src/hooks/useJobs.ts` — React Query (`useJobs` con modo `keyword`/`semantic`,
+  `useTriggerIngestion`, `useTriggerEnrichment`, ambos invalidan la cache de jobs).
+- `src/components/JobCard.tsx` — ahora muestra seniority/modalidad/salario/resumen/
+  requirements cuando el aviso ya fue enriquecido (`enrichment_status === "done"`);
+  si no, se ve igual que en Fase 1 (título/empresa crudos).
+- `src/pages/JobSearch.tsx` — toggle "Palabra clave" / "Búsqueda con IA", botón
+  "Analizar con IA" (dispara `POST /jobs/enrich`) al lado de "Actualizar ofertas".
+- `npm install` y `npm run build` (`tsc -b && vite build`) — **compilan sin errores**
+  después de los cambios de Fase 2.
 
 ## Verificación end-to-end — qué se pudo probar en este sandbox y qué no
 
@@ -105,19 +154,37 @@ así:
   no se pudo hacer la llamada saliente real desde este entorno.
 - El servidor de prueba y el archivo SQLite temporal se detuvieron/borraron al
   terminar — no quedan artefactos de este smoke test en el repo.
+- **Fase 2, mismo smoke test**: con el server sqlite arriba, `POST /jobs/enrich` sin
+  avisos pendientes respondió `{"processed":0,"enriched":0,"failed":0}` real (no
+  mockeado). `POST /search` devolvió `500` porque `VOYAGE_API_KEY` está vacía en este
+  sandbox — **es el comportamiento esperado sin la key**, no un bug; se confirmó que el
+  server siguió vivo después del error (`GET /health` respondió `ok` inmediatamente
+  después).
 
 **Conclusión para quien corra el proyecto localmente**: el Quickstart del `README.md`
-(con Docker real y `DATABASE_URL` apuntando a Postgres) no se pudo ejercitar en este
-sandbox, pero todo el código que lo compone sí — modelos, migración, dedup, contrato de
-API y build de frontend están verificados. Lo único no verificado end-to-end es la
-combinación real Postgres+pgvector+llamada saliente a RemoteOK, por las dos
-restricciones de entorno de arriba (sin Docker, red egress restringida).
+(con Docker real, `DATABASE_URL` apuntando a Postgres, y `ANTHROPIC_API_KEY`/
+`VOYAGE_API_KEY` cargadas) no se pudo ejercitar completo en este sandbox, pero todo el
+código que lo compone sí — modelos, migración, dedup, pipeline de enrichment, contrato
+de API y build de frontend están verificados con tests + un server real corriendo. Lo
+único no verificado end-to-end con datos reales es: (1) Postgres+pgvector real (acá se
+usó sqlite), (2) la llamada saliente a RemoteOK (red del sandbox la bloquea), y (3) las
+llamadas reales a Claude/Voyage (no hay API keys en este sandbox). Los tres son
+limitaciones del entorno de esta sesión, no del código — para tenerlo funcionando esta
+noche con datos e IA reales:
 
-## Qué sigue (fases futuras, no en esta sesión — ver plan completo)
+1. `docker compose up -d`
+2. En `backend/.env`: completar `ANTHROPIC_API_KEY` y `VOYAGE_API_KEY` (las otras
+   variables ya tienen default razonable).
+3. `alembic upgrade head` (acá sí corre contra Postgres real, con pgvector).
+4. Levantar backend + frontend, `POST /jobs/ingest/remoteok`, `POST /jobs/enrich`, y
+   probar tanto la búsqueda por keyword como la de IA — todo el flujo detallado en el
+   Quickstart del `README.md`.
 
-- **Fase 2**: pipeline de enrichment con Claude (extracción estructurada, Batches API,
-  prompt caching) + embeddings con Voyage AI + búsqueda semántica.
-- **Fase 3**: motor de matching (vector pre-filter + re-rank LLM top-N).
+## Qué sigue (fases futuras — ver plan completo)
+
+- **Fase 3**: motor de matching CV↔oferta (vector pre-filter + re-rank LLM top-N). Sin
+  `profiles`/`users` todavía no hay CV real contra el cual matchear — se puede
+  adelantar el scoring contra un perfil demo hardcodeado antes de tener auth.
 - **Fase 4**: auth JWT, cuentas de usuario, carga de CV.
 - **Fase 5**: resto de fuentes (WeWorkRemotely RSS, HN Who's Hiring, Arbeitnow,
   Computrabajo/Bumeran/ZonaJobs con rate limiting). LinkedIn queda deliberadamente
@@ -125,3 +192,6 @@ restricciones de entorno de arriba (sin Docker, red egress restringida).
 - **Fase 6**: scheduler (APScheduler) + alertas por email/Telegram — la parte
   "autónoma" del sistema.
 - **Fase 7**: redacción asistida de cartas de presentación + pulido de UI.
+- **Optimización de costo pendiente de Fase 2**: migrar `enrich_pending_jobs` de la
+  Messages API síncrona a la Batches API (50% más barato, asíncrono) cuando el volumen
+  de avisos lo justifique — hoy se priorizó velocidad de entrega sobre costo.
