@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <title>BuscadorTrabajos Autofill — Mi perfil</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        max-width: 480px;
+        margin: 40px auto;
+        color: #1e293b;
+        padding: 0 16px;
+      }
+      h1 {
+        font-size: 18px;
+      }
+      p.hint {
+        color: #64748b;
+        font-size: 13px;
+      }
+      label {
+        display: block;
+        font-size: 12px;
+        font-weight: 600;
+        margin-top: 12px;
+        margin-bottom: 4px;
+      }
+      input,
+      textarea {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 8px;
+        border: 1px solid #cbd5e1;
+        border-radius: 6px;
+        font-size: 13px;
+        font-family: inherit;
+      }
+      textarea {
+        resize: vertical;
+      }
+      button {
+        margin-top: 16px;
+        padding: 10px 16px;
+        border: none;
+        border-radius: 6px;
+        background: #4f46e5;
+        color: white;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      #saved {
+        color: #16a34a;
+        font-size: 13px;
+        margin-left: 10px;
+      }
+      fieldset {
+        border: none;
+        padding: 0;
+        margin: 24px 0 0;
+        border-top: 1px solid #e2e8f0;
+      }
+      legend {
+        font-size: 13px;
+        font-weight: 600;
+        padding: 0;
+        color: #475569;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Mi perfil — BuscadorTrabajos Autofill</h1>
+    <p class="hint">
+      Se guarda solo en este navegador (nunca se sube a ningún servidor salvo cuando
+      generás una respuesta con IA para un campo de texto libre). Se usa para completar
+      formularios de postulación — la extensión nunca los envía por vos.
+    </p>
+
+    <label for="firstName">Nombre</label>
+    <input id="firstName" type="text" placeholder="Juan" />
+
+    <label for="lastName">Apellido</label>
+    <input id="lastName" type="text" placeholder="Pérez" />
+
+    <label for="fullName">Nombre completo (si el formulario pide un solo campo)</label>
+    <input id="fullName" type="text" placeholder="Juan Pérez" />
+
+    <label for="email">Email</label>
+    <input id="email" type="email" placeholder="juan@example.com" />
+
+    <label for="phone">Teléfono</label>
+    <input id="phone" type="text" placeholder="+54 9 11 1234-5678" />
+
+    <label for="linkedinUrl">LinkedIn</label>
+    <input id="linkedinUrl" type="text" placeholder="https://linkedin.com/in/juanperez" />
+
+    <label for="portfolioUrl">Portfolio / GitHub / sitio web</label>
+    <input id="portfolioUrl" type="text" placeholder="https://github.com/juanperez" />
+
+    <label for="location">Ubicación</label>
+    <input id="location" type="text" placeholder="Buenos Aires, Argentina" />
+
+    <label for="yearsExperience">Años de experiencia</label>
+    <input id="yearsExperience" type="text" placeholder="5" />
+
+    <label for="summary">
+      Resumen / CV (se usa para que la IA responda preguntas abiertas del formulario,
+      ej. "¿por qué te interesa este puesto?")
+    </label>
+    <textarea id="summary" rows="6" placeholder="Desarrollador backend con 5 años de experiencia en Python y AWS..."></textarea>
+
+    <fieldset>
+      <legend>Avanzado</legend>
+      <label for="apiBaseUrl">URL de la API de BuscadorTrabajos</label>
+      <input id="apiBaseUrl" type="text" placeholder="http://localhost:8000/api/v1" />
+      <p class="hint">
+        Si la cambiás de localhost, el navegador te va a pedir permiso para que la
+        extensión pueda llamar a ese dominio.
+      </p>
+    </fieldset>
+
+    <button id="saveBtn">Guardar</button>
+    <span id="saved"></span>
+
+    <script src="options.js"></script>
+  </body>
+</html>

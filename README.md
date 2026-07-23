@@ -8,8 +8,12 @@ automáticamente.
 ## Estado actual
 
 MVP en construcción por fases (ver plan de arquitectura). Completas: **Fase 1**
-(ingestion de RemoteOK, almacenamiento en Postgres, búsqueda por keyword) y **Fase 2**
-(normalización de avisos con Claude + embeddings con Voyage AI + búsqueda semántica).
+(ingestion de RemoteOK, almacenamiento en Postgres, búsqueda por keyword), **Fase 2**
+(normalización de avisos con Claude + embeddings con Voyage AI + búsqueda semántica), y
+un bloque adicional de "asistente de postulación": bandeja de puestos estilo Gmail,
+generación de cartas de presentación con IA, y una extensión de navegador (`extension/`)
+que completa formularios de postulación en cualquier sitio con tu perfil — nunca los
+envía, revisás y postulás vos. Ver `PRIMEROS_PASOS.md` para el detalle de esa parte.
 Todavía no hay autenticación, más fuentes, ni scheduler — eso llega en fases
 siguientes. Ver `PROGRESS.md` para el detalle de qué se construyó y qué falta.
 
@@ -95,3 +99,11 @@ pytest
 Los tests nunca llaman a Claude/Voyage/RemoteOK reales — todo mockeado
 (`respx` para HTTP, stubs para los clientes `anthropic`/`voyageai`). No hace falta
 ninguna API key para correr la suite.
+
+## Extensión de navegador (autofill)
+
+Ver `extension/README.md` para instalarla (`chrome://extensions` → modo desarrollador
+→ cargar descomprimida) y probarla. Completa campos de formularios de postulación en
+cualquier sitio con tu perfil (guardado local en la extensión) y, para preguntas
+abiertas, con una respuesta generada por IA vía `POST /api/v1/autofill/answer`. Nunca
+envía el formulario — eso lo hacés vos.

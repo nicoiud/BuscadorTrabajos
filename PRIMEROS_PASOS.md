@@ -94,14 +94,36 @@ migrar a un perfil sincronizado con el backend una vez que Fase 4 exista.
    backend). Verificado end-to-end con Playwright contra un backend con Claude
    mockeado (no hay `ANTHROPIC_API_KEY` real en este sandbox): cargar perfil → abrir
    puesto → generar carta → se renderiza el borrador — funcionó completo.
-3. Extensión de navegador (nuevo componente del repo, ej. `extension/`):
-   - Manifest V3, pantalla de opciones para cargar el perfil local (nombre, email,
-     teléfono, links, CV/resumen) — puede reusar el mismo perfil de texto libre que ya
-     vive en `localStorage` del paso 2, o pedir uno estructurado aparte.
-   - Content script que detecta campos por label/placeholder/name (heurísticas +
-     fallback a Claude para campos ambiguos o de texto libre) y los completa.
-   - Sin submit automático, nunca.
+3. ✅ **Hecho** — Extensión de navegador (`extension/`, Manifest V3, nuevo componente
+   del repo). `options.html`/`options.js` guardan un perfil estructurado (nombre,
+   apellido, email, teléfono, LinkedIn, portfolio, ubicación, años de experiencia,
+   resumen/CV) en `chrome.storage.local` — perfil propio de la extensión, separado del
+   `localStorage` de la web app (son orígenes distintos, no pueden compartir storage).
+   `content.js` (inyectado solo al apretar el botón del popup, vía `activeTab` +
+   `scripting` — nunca corre solo en cada página que visitás) recorre `input`/
+   `textarea` visibles, matchea por label/placeholder/name contra un diccionario de
+   heurísticas (email, teléfono, LinkedIn, nombre/apellido, ubicación, años de
+   experiencia) y completa directo. Para `textarea` que parecen preguntas abiertas
+   (terminan en "?", "por qué", "cuéntanos", etc.) pide una respuesta a
+   `POST /api/v1/autofill/answer` (nuevo endpoint, `services/enrichment/
+   field_answer.py`, mismo patrón Claude que el resto) — como máximo 5 por formulario.
+   `background.js` hace el fetch real (el content script no puede por CORS/CSP de la
+   página de terceros), usando `host_permissions` para `localhost:8000` por default, y
+   pidiendo permiso dinámico (`chrome.permissions.request`) si se cambia a otra URL de
+   API en Opciones. **Nunca toca el botón de submit** — regla dura respetada.
+   28/28 tests backend. Verificado end-to-end con Playwright cargando la extensión de
+   verdad en Chromium (`launch_persistent_context` con `--load-extension`) contra un
+   formulario de prueba y el backend con Claude mockeado: perfil guardado → click en
+   "Rellenar este formulario" → los 6 campos se completaron correctamente (incluida la
+   respuesta de IA a "¿Por qué te interesa este puesto?") → el botón "Enviar
+   postulación" quedó intacto, sin tocar. Nota: para que `chrome.tabs.query` pudiera
+   ubicar la pestaña de prueba en el entorno de test se usó una copia temporal de la
+   extensión con permisos ampliados (`tabs` + host_permissions extra) — la extensión
+   commiteada en el repo mantiene los permisos mínimos (`activeTab`, sin `tabs`, sin
+   `<all_urls>`) que es como se usa en la vida real (el click en el ícono de la
+   extensión ya le da acceso temporal a la pestaña activa).
 4. (Más adelante, no bloqueante) migrar el perfil de la extensión a estar sincronizado
-   con el backend cuando exista Fase 4.
+   con el backend cuando exista Fase 4, en vez de vivir solo local.
 
-Siguiente paso a construir: el punto 3 (extensión de navegador).
+Los tres pasos del plan de autofill están completos. Ver `extension/README.md` para
+cómo cargarla y probarla.

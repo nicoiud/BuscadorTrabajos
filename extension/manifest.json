@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "BuscadorTrabajos Autofill",
+  "version": "0.1.0",
+  "description": "Completa formularios de postulación con tu perfil guardado localmente. Nunca envía el formulario por vos — vos revisás y postulás.",
+  "permissions": ["storage", "activeTab", "scripting"],
+  "host_permissions": ["http://localhost:8000/*"],
+  "optional_host_permissions": ["http://*/*", "https://*/*"],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "BuscadorTrabajos Autofill"
+  },
+  "options_page": "options.html",
+  "background": {
+    "service_worker": "background.js"
+  }
+}

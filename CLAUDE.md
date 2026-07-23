@@ -37,6 +37,18 @@ vía la API oficial de partners o carga manual de links por el usuario — no sc
 automatizado. Si una tarea pide "agregar LinkedIn", primero volver a levantar este
 riesgo con el usuario en vez de implementarlo directamente.
 
+## Extensión de navegador (`extension/`)
+
+Autofill de formularios de postulación en sitios de terceros, tipo LastPass. Regla
+dura, no negociable: **la extensión nunca envía/hace submit de un formulario**. Solo
+completa campos para que el usuario revise y postule él mismo — automatizar el submit
+es, en la práctica, auto-apply, que fue descartado explícitamente al definir el
+alcance del proyecto (ver `PRIMEROS_PASOS.md`). Cualquier cambio a `content.js` debe
+preservar esto. El perfil de la extensión vive en `chrome.storage.local` (no en el
+backend) hasta que exista Fase 4; usa permisos mínimos (`activeTab`, no `<all_urls>`)
+para que el content script solo se inyecte cuando el usuario aprieta el botón, no
+automáticamente en cada página.
+
 ## Migraciones
 
 Cambios de modelo van siempre acompañados de una migración Alembic
