@@ -1,4 +1,5 @@
 import type { JobPosting } from "../api/jobs";
+import { CoverLetterAssistant } from "./CoverLetterAssistant";
 
 const MODALITY_LABELS: Record<NonNullable<JobPosting["modality"]>, string> = {
   remote: "Remoto",
@@ -27,9 +28,15 @@ interface JobDetailPanelProps {
   job: JobPosting | null;
   isSelected: boolean;
   onToggleSelected: () => void;
+  profileText: string;
 }
 
-export function JobDetailPanel({ job, isSelected, onToggleSelected }: JobDetailPanelProps) {
+export function JobDetailPanel({
+  job,
+  isSelected,
+  onToggleSelected,
+  profileText,
+}: JobDetailPanelProps) {
   if (!job) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-slate-400">
@@ -100,6 +107,8 @@ export function JobDetailPanel({ job, isSelected, onToggleSelected }: JobDetailP
           seniority, modalidad, salario y resumen.
         </p>
       )}
+
+      <CoverLetterAssistant jobId={job.id} profileText={profileText} />
 
       <div className="mb-4">
         <h3 className="mb-1 text-sm font-semibold text-slate-900">Descripción original</h3>

@@ -39,6 +39,11 @@ export interface EnrichResult {
   failed: number;
 }
 
+export interface CoverLetterDraft {
+  cover_letter: string;
+  key_points: string[];
+}
+
 const API_BASE = "/api/v1";
 
 export async function fetchJobs(query: string): Promise<JobPostingList> {
@@ -76,6 +81,21 @@ export async function triggerEnrichment(): Promise<EnrichResult> {
   const response = await fetch(`${API_BASE}/jobs/enrich`, { method: "POST" });
   if (!response.ok) {
     throw new Error(`Error al disparar el enrichment: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function generateCoverLetter(
+  jobId: string,
+  profileText: string,
+): Promise<CoverLetterDraft> {
+  const response = await fetch(`${API_BASE}/jobs/${jobId}/cover-letter`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ profile_text: profileText }),
+  });
+  if (!response.ok) {
+    throw new Error(`Error al generar la carta: ${response.status}`);
   }
   return response.json();
 }

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   fetchJobs,
+  generateCoverLetter,
   semanticSearchJobs,
   triggerEnrichment,
   triggerRemoteOkIngestion,
@@ -34,5 +35,12 @@ export function useTriggerEnrichment() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["jobs"] });
     },
+  });
+}
+
+export function useGenerateCoverLetter() {
+  return useMutation({
+    mutationFn: ({ jobId, profileText }: { jobId: string; profileText: string }) =>
+      generateCoverLetter(jobId, profileText),
   });
 }

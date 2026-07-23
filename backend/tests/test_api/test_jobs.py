@@ -2,6 +2,7 @@ import respx
 from httpx import Response
 
 from app.api.v1 import jobs as jobs_api
+from app.services.enrichment.cover_letter import CoverLetterDraft
 from app.services.enrichment.pipeline import EnrichResult
 from app.services.ingestion.remoteok import REMOTEOK_API_URL
 
@@ -64,3 +65,34 @@ async def test_trigger_enrichment_returns_pipeline_result(client, monkeypatch):
 
     assert response.status_code == 200
     assert response.json() == {"processed": 3, "enriched": 2, "failed": 1}
+
+
+@respx.mock
+async def test_generate_cover_letter_for_existing_job(client, remoteok_api_fixture, monkeypatch):
+    respx.get(REMOTEOK_API_URL).mock(return_value=Response(200, json=remoteok_api_fixture))
+    await client.post("/api/v1/jobs/ingest/remoteok")
+    jobs = (await client.get("/api/v1/jobs")).json()["items"]
+    job_id = jobs[0]["id"]
+
+    async def fake_generate_cover_letter(title, company, description, profile_text):
+        assert profile_text == "Soy dev Python senior con 5 años de experiencia."
+        return CoverLetterDraft(cover_letter="Estimados, ...", key_points=["Punto 1", "Punto 2"])
+
+    monkeypatch.setattr(jobs_api, "generate_cover_letter", fake_generate_cover_letter)
+
+    response = await client.post(
+        f"/api/v1/jobs/{job_id}/cover-letter",
+        json={"profile_text": "Soy dev Python senior con 5 años de experiencia."},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"cover_letter": "Estimados, ...", "key_points": ["Punto 1", "Punto 2"]}
+
+
+async def test_generate_cover_letter_404_for_unknown_job(client):
+    response = await client.post(
+        "/api/v1/jobs/00000000-0000-0000-0000-000000000000/cover-letter",
+        json={"profile_text": "Perfil"},
+    )
+
+    assert response.status_code == 404

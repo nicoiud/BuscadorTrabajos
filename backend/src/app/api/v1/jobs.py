@@ -1,10 +1,20 @@
-from fastapi import APIRouter, Depends, Query
+import uuid
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
 from app.models.job_posting import JobLanguage, JobPosting, JobRegion
-from app.schemas.job import EnrichResultOut, IngestResultOut, JobPostingList, JobPostingOut
+from app.schemas.job import (
+    CoverLetterOut,
+    CoverLetterRequest,
+    EnrichResultOut,
+    IngestResultOut,
+    JobPostingList,
+    JobPostingOut,
+)
+from app.services.enrichment.cover_letter import generate_cover_letter
 from app.services.enrichment.pipeline import enrich_pending_jobs
 from app.services.ingestion.remoteok import RemoteOkAdapter
 from app.services.ingestion.runner import ingest_source
@@ -60,3 +70,17 @@ async def trigger_enrichment(
 ) -> EnrichResultOut:
     result = await enrich_pending_jobs(db, limit=limit)
     return EnrichResultOut(**result.__dict__)
+
+
+@router.post("/{job_id}/cover-letter", response_model=CoverLetterOut)
+async def generate_job_cover_letter(
+    job_id: uuid.UUID, body: CoverLetterRequest, db: AsyncSession = Depends(get_db)
+) -> CoverLetterOut:
+    job = await db.get(JobPosting, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job posting not found")
+
+    title = job.title_normalized or job.title_raw
+    company = job.company_normalized or job.company_raw
+    draft = await generate_cover_letter(title, company, job.description_raw, body.profile_text)
+    return CoverLetterOut(cover_letter=draft.cover_letter, key_points=draft.key_points)

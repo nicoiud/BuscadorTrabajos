@@ -81,15 +81,27 @@ migrar a un perfil sincronizado con el backend una vez que Fase 4 exista.
    real en este sandbox): navegación lista→detalle, toggle de selección, cambio de
    modo palabra clave/IA, y persistencia tras reload — todo funcionando. Build y 20
    tests de backend siguen pasando.
-2. Endpoint + UI para generar el borrador de carta de presentación/respuestas por
-   puesto seleccionado (Claude, reutilizando el patrón de `services/enrichment/`).
+2. ✅ **Hecho** — Asistente de carta de presentación con IA por puesto.
+   `services/enrichment/cover_letter.py` (mismo patrón tool-use que el extractor de
+   Fase 2) genera `{cover_letter, key_points}` con Claude a partir del aviso + el
+   perfil del usuario. Endpoint `POST /jobs/{job_id}/cover-letter` (404 si el puesto no
+   existe). El perfil del usuario **vive en `localStorage`** (`hooks/useProfile.ts`,
+   textarea "Mi perfil" en el header de la bandeja) — mismo criterio que la selección
+   de puestos, sin depender de Fase 4. En el detalle de cada puesto,
+   `components/CoverLetterAssistant.tsx` tiene el botón "Generar carta con IA"
+   (deshabilitado hasta completar el perfil), muestra el borrador en un textarea con
+   botón "Copiar" (clipboard), y los puntos clave reusables. 5 tests nuevos (25/25
+   backend). Verificado end-to-end con Playwright contra un backend con Claude
+   mockeado (no hay `ANTHROPIC_API_KEY` real en este sandbox): cargar perfil → abrir
+   puesto → generar carta → se renderiza el borrador — funcionó completo.
 3. Extensión de navegador (nuevo componente del repo, ej. `extension/`):
    - Manifest V3, pantalla de opciones para cargar el perfil local (nombre, email,
-     teléfono, links, CV/resumen).
+     teléfono, links, CV/resumen) — puede reusar el mismo perfil de texto libre que ya
+     vive en `localStorage` del paso 2, o pedir uno estructurado aparte.
    - Content script que detecta campos por label/placeholder/name (heurísticas +
      fallback a Claude para campos ambiguos o de texto libre) y los completa.
    - Sin submit automático, nunca.
 4. (Más adelante, no bloqueante) migrar el perfil de la extensión a estar sincronizado
    con el backend cuando exista Fase 4.
 
-Siguiente paso a construir: el punto 2 (asistente de carta de presentación).
+Siguiente paso a construir: el punto 3 (extensión de navegador).

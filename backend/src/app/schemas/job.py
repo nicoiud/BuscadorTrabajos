@@ -53,3 +53,12 @@ class EnrichResultOut(BaseModel):
 class SemanticSearchRequest(BaseModel):
     query: str
     limit: int = 20
+
+
+class CoverLetterRequest(BaseModel):
+    profile_text: str
+
+
+class CoverLetterOut(BaseModel):
+    cover_letter: str
+    key_points: list[str]
