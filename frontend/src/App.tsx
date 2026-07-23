@@ -1,5 +1,5 @@
-import { JobSearch } from "./pages/JobSearch";
+import { JobInbox } from "./pages/JobInbox";
 
 export function App() {
-  return <JobSearch />;
+  return <JobInbox />;
 }

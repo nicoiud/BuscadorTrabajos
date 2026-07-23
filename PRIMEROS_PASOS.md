@@ -70,7 +70,17 @@ migrar a un perfil sincronizado con el backend una vez que Fase 4 exista.
 
 ## Qué sigue (próximos pasos concretos, en orden)
 
-1. Bandeja tipo Gmail en el frontend (lista + detalle + selección de puestos).
+1. ✅ **Hecho** — Bandeja tipo Gmail en el frontend. `pages/JobInbox.tsx` (reemplazó
+   `JobSearch.tsx`, borrado) con layout de dos paneles: `components/JobListRow.tsx`
+   (fila estilo email, con checkbox de selección) a la izquierda,
+   `components/JobDetailPanel.tsx` (detalle completo + link al aviso original) a la
+   derecha. Selección persistida en `localStorage` vía `hooks/useSelectedJobs.ts`
+   (sobrevive a recargar la página — verificado con Playwright, no solo en memoria).
+   En mobile el detalle se abre a pantalla completa con botón "← Volver". Verificado
+   visualmente con Playwright contra datos de prueba (sqlite local, no había Postgres
+   real en este sandbox): navegación lista→detalle, toggle de selección, cambio de
+   modo palabra clave/IA, y persistencia tras reload — todo funcionando. Build y 20
+   tests de backend siguen pasando.
 2. Endpoint + UI para generar el borrador de carta de presentación/respuestas por
    puesto seleccionado (Claude, reutilizando el patrón de `services/enrichment/`).
 3. Extensión de navegador (nuevo componente del repo, ej. `extension/`):
@@ -82,5 +92,4 @@ migrar a un perfil sincronizado con el backend una vez que Fase 4 exista.
 4. (Más adelante, no bloqueante) migrar el perfil de la extensión a estar sincronizado
    con el backend cuando exista Fase 4.
 
-Todavía no arrancamos a construir nada de esta lista — este archivo es el checkpoint
-para retomarlo.
+Siguiente paso a construir: el punto 2 (asistente de carta de presentación).
