@@ -13,9 +13,15 @@ class Settings(BaseSettings):
     scraper_user_agent: str = "BuscadorTrabajosBot/0.1 (+contact@example.com)"
     scraper_default_delay_seconds: float = 3.0
 
-    anthropic_api_key: str = ""
+    # Cliente de chat/completions compatible con OpenAI. Sirve para Groq
+    # (https://api.groq.com/openai/v1), NVIDIA API Catalog
+    # (https://integrate.api.nvidia.com/v1), OpenAI mismo, o cualquier otro proveedor
+    # que hable el mismo protocolo — solo cambian estas tres variables, no el código.
+    llm_api_key: str = ""
+    llm_base_url: str = "https://api.groq.com/openai/v1"
+    llm_model: str = "llama-3.1-70b-versatile"
+
     voyage_api_key: str = ""
-    claude_model: str = "claude-sonnet-5"
     voyage_model: str = "voyage-3"
     enrichment_batch_size: int = 20
 

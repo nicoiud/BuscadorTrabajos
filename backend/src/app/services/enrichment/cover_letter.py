@@ -1,15 +1,12 @@
 from dataclasses import dataclass
 
-import anthropic
-
-from app.core.config import settings
+from app.services.enrichment.llm_client import LLMError, call_with_tool
 
 DRAFT_TOOL_NAME = "record_cover_letter_draft"
 
-_DRAFT_TOOL = {
-    "name": DRAFT_TOOL_NAME,
+_DRAFT_SCHEMA = {
     "description": "Registra el borrador de carta de presentación y puntos clave para un aviso.",
-    "input_schema": {
+    "parameters": {
         "type": "object",
         "properties": {
             "cover_letter": {
@@ -35,7 +32,7 @@ _DRAFT_TOOL = {
 
 _SYSTEM_PROMPT = (
     "Sos un asistente que ayuda a candidatos a postular a empleos. Te paso el perfil/CV "
-    "de una persona y un aviso de empleo, y llamás a la herramienta "
+    "de una persona y un aviso de empleo, y llamás a la función "
     f"'{DRAFT_TOOL_NAME}' con un borrador de carta de presentación honesto (no inventes "
     "experiencia que no está en el perfil) y puntos clave reusables. Escribí en el mismo "
     "idioma del aviso."
@@ -52,10 +49,6 @@ class CoverLetterError(Exception):
     pass
 
 
-def get_client() -> anthropic.AsyncAnthropic:
-    return anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-
-
 def _build_user_message(
     job_title: str, job_company: str, job_description: str, profile_text: str
 ) -> str:
@@ -70,35 +63,20 @@ def _build_user_message(
 async def generate_cover_letter(
     job_title: str, job_company: str, job_description: str, profile_text: str
 ) -> CoverLetterDraft:
-    client = get_client()
-    response = await client.messages.create(
-        model=settings.claude_model,
-        max_tokens=1024,
-        system=_SYSTEM_PROMPT,
-        tools=[_DRAFT_TOOL],
-        tool_choice={"type": "tool", "name": DRAFT_TOOL_NAME},
-        messages=[
-            {
-                "role": "user",
-                "content": _build_user_message(
-                    job_title, job_company, job_description, profile_text
-                ),
-            }
-        ],
-    )
+    try:
+        data = await call_with_tool(
+            _SYSTEM_PROMPT,
+            _build_user_message(job_title, job_company, job_description, profile_text),
+            DRAFT_TOOL_NAME,
+            _DRAFT_SCHEMA,
+        )
+    except LLMError as exc:
+        raise CoverLetterError(str(exc)) from exc
 
-    tool_use = next(
-        (block for block in response.content if getattr(block, "type", None) == "tool_use"),
-        None,
-    )
-    if tool_use is None:
-        raise CoverLetterError("Claude no devolvió un tool_use block con el borrador.")
-
-    data = tool_use.input
     try:
         return CoverLetterDraft(
             cover_letter=data["cover_letter"],
             key_points=list(data["key_points"]),
         )
     except KeyError as exc:
-        raise CoverLetterError(f"Respuesta de Claude incompleta, falta el campo {exc}") from exc
+        raise CoverLetterError(f"Respuesta del modelo incompleta, falta el campo {exc}") from exc

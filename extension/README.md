@@ -17,7 +17,8 @@ guarda credenciales de ningún sitio de terceros.
 
 1. Arrancá el backend (`cd backend && uvicorn app.main:app --reload --app-dir src`) —
    la extensión llama a `POST /api/v1/autofill/answer` para las preguntas de texto
-   libre. Necesita `ANTHROPIC_API_KEY` configurada para esa parte; el resto (campos
+   libre. Necesita `LLM_API_KEY` (Groq, NVIDIA, o cualquier proveedor compatible con
+   OpenAI) configurada para esa parte; el resto (campos
    estructurados: nombre/email/teléfono/etc.) funciona sin backend, es 100% local.
 2. En Chrome/Edge: `chrome://extensions` → activar "Modo desarrollador" → "Cargar
    descomprimida" → seleccionar esta carpeta (`extension/`).

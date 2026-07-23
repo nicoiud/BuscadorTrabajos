@@ -1,6 +1,4 @@
-import anthropic
-
-from app.core.config import settings
+from app.services.enrichment.llm_client import call_text
 
 _SYSTEM_PROMPT = (
     "Sos un asistente que ayuda a completar formularios de postulación laboral. Te paso "
@@ -12,29 +10,9 @@ _SYSTEM_PROMPT = (
 )
 
 
-def get_client() -> anthropic.AsyncAnthropic:
-    return anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-
-
 async def generate_field_answer(field_label: str, profile_text: str) -> str:
-    client = get_client()
-    response = await client.messages.create(
-        model=settings.claude_model,
-        max_tokens=300,
-        system=_SYSTEM_PROMPT,
-        messages=[
-            {
-                "role": "user",
-                "content": (
-                    f"Perfil/CV:\n{profile_text[:4000]}\n\n"
-                    f"Campo del formulario a completar: {field_label}"
-                ),
-            }
-        ],
+    user_message = (
+        f"Perfil/CV:\n{profile_text[:4000]}\n\n"
+        f"Campo del formulario a completar: {field_label}"
     )
-
-    text_block = next(
-        (block for block in response.content if getattr(block, "type", None) == "text"),
-        None,
-    )
-    return text_block.text.strip() if text_block is not None else ""
+    return await call_text(_SYSTEM_PROMPT, user_message, max_tokens=300)

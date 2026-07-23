@@ -8,6 +8,14 @@ historial de commits/PRs.
 Contexto completo del plan de arquitectura (todas las fases) en el mensaje de diseño
 original; convenciones de código en `CLAUDE.md`; quickstart en `README.md`.
 
+> **Actualización posterior**: todo lo que este archivo describe abajo como "Claude"/
+> "Anthropic" se implementó originalmente contra la API de Anthropic, pero luego se
+> migró a un cliente genérico compatible con OpenAI (`services/enrichment/
+> llm_client.py`) para poder usar Groq o NVIDIA API Catalog (gratuitos) en vez de
+> Anthropic — ver `LLM_API_KEY`/`LLM_BASE_URL`/`LLM_MODEL` en `.env.example` y el
+> registro correspondiente en `PRIMEROS_PASOS.md`. El resto de las decisiones
+> (tool-calling forzado, batching, etc.) sigue vigente, solo cambió el proveedor.
+
 ## Ya creado
 
 ### Scaffolding raíz

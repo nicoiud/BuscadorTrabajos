@@ -9,7 +9,9 @@ automáticamente.
 
 MVP en construcción por fases (ver plan de arquitectura). Completas: **Fase 1**
 (ingestion de RemoteOK, almacenamiento en Postgres, búsqueda por keyword), **Fase 2**
-(normalización de avisos con Claude + embeddings con Voyage AI + búsqueda semántica), y
+(normalización de avisos + embeddings con Voyage AI + búsqueda semántica — el modelo de
+chat es configurable: Groq, NVIDIA API Catalog o cualquier proveedor compatible con la
+API de OpenAI, ver "Variables de entorno"), y
 un bloque adicional de "asistente de postulación": bandeja de puestos estilo Gmail,
 generación de cartas de presentación con IA, y una extensión de navegador (`extension/`)
 que completa formularios de postulación en cualquier sitio con tu perfil — nunca los
@@ -46,8 +48,8 @@ docker compose up -d
 # 2. Backend
 cd backend
 cp ../.env.example .env
-# completar ANTHROPIC_API_KEY y VOYAGE_API_KEY en .env para que el enrichment y la
-# búsqueda semántica funcionen (ver "Variables de entorno" abajo)
+# completar LLM_API_KEY (Groq o NVIDIA, ver "Variables de entorno" abajo) y
+# VOYAGE_API_KEY en .env para que el enrichment y la búsqueda semántica funcionen
 pip install -e ".[dev]"
 alembic upgrade head
 uvicorn app.main:app --reload --app-dir src
@@ -80,13 +82,19 @@ y "Analizar con IA" disparan los pasos 3 y 4 desde la UI, y el toggle
 ## Variables de entorno
 
 Ver `.env.example` para la lista completa. Para Fase 1 alcanza con `DATABASE_URL`. A
-partir de Fase 2, `POST /jobs/enrich` y `POST /search` necesitan:
+partir de Fase 2, `POST /jobs/enrich`, `POST /search`, la carta de presentación y el
+autofill de la extensión necesitan:
 
-- `ANTHROPIC_API_KEY` — para normalizar avisos (título/empresa/seniority/modalidad/
-  salario/requirements/resumen).
+- `LLM_API_KEY` + `LLM_BASE_URL` + `LLM_MODEL` — cualquier proveedor compatible con la
+  API de chat completions de OpenAI. Probado con:
+  - **Groq** (gratis): `LLM_BASE_URL=https://api.groq.com/openai/v1`,
+    `LLM_MODEL=llama-3.1-70b-versatile`.
+  - **NVIDIA API Catalog** (gratis): `LLM_BASE_URL=https://integrate.api.nvidia.com/v1`,
+    `LLM_MODEL=meta/llama-3.1-70b-instruct`.
+  - No hace falta tocar código para cambiar de uno a otro, solo estas tres variables.
 - `VOYAGE_API_KEY` — para generar los embeddings usados en la búsqueda semántica.
 
-Sin esas claves esos dos endpoints devuelven error 500 (el resto de la app funciona
+Sin `LLM_API_KEY` esos endpoints devuelven error 500 (el resto de la app funciona
 igual — ingestion y búsqueda por keyword no dependen de IA).
 
 ## Tests
@@ -96,8 +104,8 @@ cd backend
 pytest
 ```
 
-Los tests nunca llaman a Claude/Voyage/RemoteOK reales — todo mockeado
-(`respx` para HTTP, stubs para los clientes `anthropic`/`voyageai`). No hace falta
+Los tests nunca llaman a Groq/NVIDIA/Voyage/RemoteOK reales — todo mockeado
+(`respx` para HTTP, stubs para los clientes `openai`/`voyageai`). No hace falta
 ninguna API key para correr la suite.
 
 ## Extensión de navegador (autofill)

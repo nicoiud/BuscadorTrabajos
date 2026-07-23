@@ -127,3 +127,34 @@ migrar a un perfil sincronizado con el backend una vez que Fase 4 exista.
 
 Los tres pasos del plan de autofill están completos. Ver `extension/README.md` para
 cómo cargarla y probarla.
+
+## Cambio de proveedor de IA: Anthropic → Groq/NVIDIA (configurable)
+
+El usuario no quería depender de la API paga de Anthropic y tiene acceso gratuito a
+Groq y a NVIDIA API Catalog — ambos exponen una API de chat compatible con el formato
+de OpenAI (mismo shape de `tools`/`tool_choice`/`chat.completions.create`). En vez de
+elegir uno solo, se armó un cliente genérico:
+
+- `services/enrichment/llm_client.py` — `get_client()` devuelve un `openai.AsyncOpenAI`
+  apuntado a `settings.llm_base_url` con `settings.llm_api_key`; `call_with_tool(...)`
+  (usado por `extractor.py` y `cover_letter.py`, fuerza una function call y devuelve
+  los argumentos ya parseados) y `call_text(...)` (usado por `field_answer.py`,
+  respuesta de texto libre).
+- `core/config.py` — `llm_api_key` / `llm_base_url` / `llm_model` reemplazan a
+  `anthropic_api_key`/`claude_model`. Cambiar de Groq a NVIDIA (o a cualquier otro
+  proveedor compatible) es solo cambiar estas tres variables en `.env`, sin tocar
+  código. Voyage AI se mantiene sin cambios para los embeddings (decisión: no se pidió
+  reemplazar esa parte, solo el chat/completions).
+- Se sacó la dependencia `anthropic` de `pyproject.toml`, se agregó `openai`.
+- Tests: los fakes de `AsyncAnthropic` (`FakeToolUseBlock`, etc.) se reemplazaron por
+  fakes con la forma de respuesta de OpenAI (`choices[0].message.tool_calls` /
+  `.content`), centralizados en `conftest.py` (`patch_llm`, `tool_call_response`,
+  `text_response`, `empty_response`) para no triplicar el boilerplate en los tres
+  archivos de test que los usan. 28/28 tests siguen pasando.
+
+**Pendiente de que el usuario pruebe**: configurar `LLM_API_KEY` con su key de Groq o
+NVIDIA en `backend/.env` (ver `.env.example`, tiene ambas opciones comentadas) y correr
+`POST /jobs/enrich` / `POST /search` / la carta de presentación / el autofill de la
+extensión contra el proveedor real — no se pudo probar con una key real en este
+sandbox (no hay red de salida a Groq/NVIDIA ni las credenciales), así que esta parte
+solo está verificada con mocks.

@@ -1,15 +1,12 @@
 from dataclasses import dataclass
 
-import anthropic
-
-from app.core.config import settings
+from app.services.enrichment.llm_client import LLMError, call_with_tool
 
 EXTRACTION_TOOL_NAME = "record_job_extraction"
 
-_EXTRACTION_TOOL = {
-    "name": EXTRACTION_TOOL_NAME,
+_EXTRACTION_SCHEMA = {
     "description": "Registra los campos normalizados de un aviso de empleo.",
-    "input_schema": {
+    "parameters": {
         "type": "object",
         "properties": {
             "title_normalized": {
@@ -52,7 +49,7 @@ _EXTRACTION_TOOL = {
 _SYSTEM_PROMPT = (
     "Sos un extractor de datos estructurados para avisos de empleo. Analizás el "
     "título, empresa y descripción de un aviso (puede estar en español o inglés, y "
-    "puede tener HTML/formato desprolijo) y llamás a la herramienta "
+    "puede tener HTML/formato desprolijo) y llamás a la función "
     f"'{EXTRACTION_TOOL_NAME}' con los campos normalizados. No inventes salario si no "
     "está explícito en el texto — usá null."
 )
@@ -75,10 +72,6 @@ class ExtractionError(Exception):
     pass
 
 
-def get_client() -> anthropic.AsyncAnthropic:
-    return anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-
-
 def _build_user_message(title_raw: str, company_raw: str, description_raw: str) -> str:
     return (
         f"Título: {title_raw}\n"
@@ -90,26 +83,16 @@ def _build_user_message(title_raw: str, company_raw: str, description_raw: str) 
 async def extract_job_fields(
     title_raw: str, company_raw: str, description_raw: str
 ) -> JobExtraction:
-    client = get_client()
-    response = await client.messages.create(
-        model=settings.claude_model,
-        max_tokens=1024,
-        system=_SYSTEM_PROMPT,
-        tools=[_EXTRACTION_TOOL],
-        tool_choice={"type": "tool", "name": EXTRACTION_TOOL_NAME},
-        messages=[
-            {"role": "user", "content": _build_user_message(title_raw, company_raw, description_raw)}
-        ],
-    )
+    try:
+        data = await call_with_tool(
+            _SYSTEM_PROMPT,
+            _build_user_message(title_raw, company_raw, description_raw),
+            EXTRACTION_TOOL_NAME,
+            _EXTRACTION_SCHEMA,
+        )
+    except LLMError as exc:
+        raise ExtractionError(str(exc)) from exc
 
-    tool_use = next(
-        (block for block in response.content if getattr(block, "type", None) == "tool_use"),
-        None,
-    )
-    if tool_use is None:
-        raise ExtractionError("Claude no devolvió un tool_use block con la extracción.")
-
-    data = tool_use.input
     try:
         return JobExtraction(
             title_normalized=data["title_normalized"],
@@ -123,4 +106,4 @@ async def extract_job_fields(
             currency=data.get("currency"),
         )
     except KeyError as exc:
-        raise ExtractionError(f"Respuesta de Claude incompleta, falta el campo {exc}") from exc
+        raise ExtractionError(f"Respuesta del modelo incompleta, falta el campo {exc}") from exc

@@ -68,7 +68,7 @@ async def enrich_pending_jobs(db: AsyncSession, limit: int | None = None) -> Enr
         for (job, _), embedding in zip(extracted, embeddings, strict=True):
             job.embedding = embedding
             job.enrichment_status = EnrichmentStatus.DONE
-            job.enrichment_model = settings.claude_model
+            job.enrichment_model = settings.llm_model
 
     await db.commit()
 
