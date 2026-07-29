@@ -9,9 +9,10 @@ automáticamente.
 
 MVP en construcción por fases (ver plan de arquitectura). Completas: **Fase 1**
 (ingestion de RemoteOK, almacenamiento en Postgres, búsqueda por keyword), **Fase 2**
-(normalización de avisos + embeddings con Voyage AI + búsqueda semántica — el modelo de
-chat es configurable: Groq, NVIDIA API Catalog o cualquier proveedor compatible con la
-API de OpenAI, ver "Variables de entorno"), y
+(normalización de avisos + embeddings + búsqueda semántica — tanto el modelo de chat
+como el de embeddings son configurables contra cualquier proveedor compatible con la
+API de OpenAI (Groq, NVIDIA API Catalog, Ollama local, etc.), ver "Variables de
+entorno"), y
 un bloque adicional de "asistente de postulación": bandeja de puestos estilo Gmail,
 generación de cartas de presentación con IA, y una extensión de navegador (`extension/`)
 que completa formularios de postulación en cualquier sitio con tu perfil — nunca los
@@ -48,8 +49,9 @@ docker compose up -d
 # 2. Backend
 cd backend
 cp ../.env.example .env
-# completar LLM_API_KEY (Groq o NVIDIA, ver "Variables de entorno" abajo) y
-# VOYAGE_API_KEY en .env para que el enrichment y la búsqueda semántica funcionen
+# completar LLM_API_KEY (Groq o NVIDIA, ver "Variables de entorno" abajo) para que
+# el enrichment funcione; para la búsqueda semántica, levantar Ollama local y correr
+# `ollama pull mxbai-embed-large` (default de EMBEDDING_* ya apunta ahí)
 pip install -e ".[dev]"
 alembic upgrade head
 uvicorn app.main:app --reload --app-dir src
@@ -92,10 +94,16 @@ autofill de la extensión necesitan:
   - **NVIDIA API Catalog** (gratis): `LLM_BASE_URL=https://integrate.api.nvidia.com/v1`,
     `LLM_MODEL=meta/llama-3.1-70b-instruct`.
   - No hace falta tocar código para cambiar de uno a otro, solo estas tres variables.
-- `VOYAGE_API_KEY` — para generar los embeddings usados en la búsqueda semántica.
+- `EMBEDDING_API_KEY` + `EMBEDDING_BASE_URL` + `EMBEDDING_MODEL` — mismo patrón, para
+  los embeddings de la búsqueda semántica. Default: **Ollama local**
+  (`EMBEDDING_BASE_URL=http://localhost:11434/v1`, `EMBEDDING_MODEL=mxbai-embed-large`)
+  — gratis, corre en tu propia GPU/CPU. Requiere `ollama pull mxbai-embed-large` antes
+  de usar "Búsqueda con IA".
 
 Sin `LLM_API_KEY` esos endpoints devuelven error 500 (el resto de la app funciona
-igual — ingestion y búsqueda por keyword no dependen de IA).
+igual — ingestion y búsqueda por keyword no dependen de IA). Sin Ollama corriendo (o
+sin el modelo de embeddings descargado), "Búsqueda con IA" falla con el mismo tipo de
+error — el resto de la app no se ve afectado.
 
 ## Tests
 
@@ -104,9 +112,10 @@ cd backend
 pytest
 ```
 
-Los tests nunca llaman a Groq/NVIDIA/Voyage/RemoteOK reales — todo mockeado
-(`respx` para HTTP, stubs para los clientes `openai`/`voyageai`). No hace falta
-ninguna API key para correr la suite.
+Los tests nunca llaman a Groq/NVIDIA/Ollama/RemoteOK reales — todo mockeado (`respx`
+para HTTP, stubs para el cliente `openai`, usado tanto para chat como para
+embeddings). No hace falta ninguna API key ni tener Ollama corriendo para correr la
+suite.
 
 ## Extensión de navegador (autofill)
 

@@ -146,7 +146,7 @@ export function JobInbox() {
           {isError && (
             <p className="p-4 text-sm text-red-600">
               {mode === "semantic"
-                ? "No se pudo hacer la búsqueda con IA. Revisá que el backend tenga configurada VOYAGE_API_KEY."
+                ? "No se pudo hacer la búsqueda con IA. Revisá que Ollama esté corriendo y tenga el modelo de embeddings descargado."
                 : "No se pudieron cargar las ofertas."}
             </p>
           )}

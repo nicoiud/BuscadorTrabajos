@@ -15,7 +15,6 @@ dependencies = [
   "python-dotenv>=1.0",
   "pgvector>=0.3",
   "openai>=1.50",
-  "voyageai>=0.3",
   "langdetect>=1.0.9",
   "ftfy>=6.3",
 ]

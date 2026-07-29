@@ -20,8 +20,11 @@ deben respetarse a medida que se implementan las fases.
   `SourceAdapter` en `services/ingestion/` (ver `services/ingestion/base.py`). El
   adapter solo hace I/O y devuelve `RawJobPosting`; nunca escribe campos derivados de
   IA.
-- Las llamadas a Claude/Voyage viven exclusivamente en `services/enrichment/` y
-  `services/matching/` — nunca inline en un router o en un adapter de ingestion.
+- Las llamadas al proveedor de LLM/embeddings (configurables vía `LLM_*`/`EMBEDDING_*`
+  en `.env`, ver `.env.example` — hoy Groq/NVIDIA para chat y Ollama local para
+  embeddings, pero cualquier endpoint compatible con la API de OpenAI sirve) viven
+  exclusivamente en `services/enrichment/` y `services/matching/` — nunca inline en un
+  router o en un adapter de ingestion.
 - Dedup de ofertas: `(source_id, external_id)` es la clave única en `job_postings`.
   Re-ingestar una oferta ya vista actualiza campos, no crea duplicados.
 - Cada fuente tiene un kill-switch (`sources.enabled`) y un `rate_limit_seconds`.
@@ -64,8 +67,9 @@ adelante si el volumen lo justifica, sin reescribir la lógica de negocio.
 
 ## Testing
 
-- Nunca pegarle a Claude/Voyage ni a sitios externos reales en tests. Mockear HTTP con
-  `respx`/`httpx` mock transports y stubear los clientes `anthropic`/`voyageai`.
+- Nunca pegarle al proveedor de LLM/embeddings (Groq/NVIDIA/Ollama) ni a sitios
+  externos reales en tests. Mockear HTTP con `respx`/`httpx` mock transports y
+  stubear el cliente `openai` (usado tanto para chat como para embeddings).
 - Los adapters de ingestion se testean contra fixtures grabados (HTML/JSON guardado),
   no contra el sitio en vivo.
 

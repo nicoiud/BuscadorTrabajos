@@ -67,7 +67,7 @@ async def enrich_pending_jobs(db: AsyncSession, limit: int | None = None) -> Enr
         try:
             embeddings = await embed_documents(texts)
         except EmbeddingError:
-            # Si Voyage falla (key faltante, rate limit, lo que sea), no perdemos el
+            # Si el proveedor de embeddings falla (ej. Ollama no está corriendo), no perdemos el
             # análisis de texto que sí funcionó — se guarda sin embedding. Sin
             # embedding esos avisos no van a aparecer en la búsqueda semántica hasta
             # que se reintente, pero no se pierde el trabajo ya hecho.

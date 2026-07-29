@@ -21,8 +21,15 @@ class Settings(BaseSettings):
     llm_base_url: str = "https://api.groq.com/openai/v1"
     llm_model: str = "llama-3.3-70b-versatile"
 
-    voyage_api_key: str = ""
-    voyage_model: str = "voyage-3"
+    # Embeddings para búsqueda semántica — mismo patrón que LLM_*: cualquier endpoint
+    # compatible con la API de embeddings de OpenAI. Default apunta a Ollama local
+    # (gratis, sin key real — Ollama no la valida, pero el cliente de OpenAI exige
+    # que el campo no esté vacío). mxbai-embed-large genera vectores de 1024
+    # dimensiones, igual que EMBEDDING_DIM en job_posting.py — si se cambia de
+    # modelo a uno con otra dimensión hace falta una migración.
+    embedding_api_key: str = "ollama"
+    embedding_base_url: str = "http://localhost:11434/v1"
+    embedding_model: str = "mxbai-embed-large"
     enrichment_batch_size: int = 20
 
 

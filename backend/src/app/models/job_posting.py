@@ -18,7 +18,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
 
-EMBEDDING_DIM = 1024  # voyage-3 embedding size
+EMBEDDING_DIM = 1024  # mxbai-embed-large (Ollama) embedding size
 
 
 def _enum(python_enum_cls: type[enum.Enum], name: str) -> Enum:

@@ -198,3 +198,67 @@ viejo), así que el filtro por idioma no les va a pegar bien hasta reingestar. D
 de levantar el backend con esta migración aplicada (`alembic upgrade head`), correr
 `POST /jobs/ingest/remoteok` de nuevo para que el dedup por `(source_id, external_id)`
 actualice el idioma real de cada aviso ya existente.
+
+## HTML crudo en la descripción + mojibake de origen (no de nuestro parseo)
+
+Dos bugs más encontrados al testear la UI en vivo:
+
+1. **`<br>`/`<p>`/`&amp;` literales en la UI**: RemoteOK devuelve título/empresa/
+   descripción con HTML embebido, y como React escapa el texto en vez de renderizarlo
+   como HTML, se veían los tags y entidades literales. Fix en
+   `services/ingestion/text_cleaning.py` (`strip_html`/`strip_html_inline`): saca tags
+   convirtiendo los de bloque (`<br>`, `</p>`, `</li>`, etc.) en saltos de línea,
+   decodifica entidades con `html.unescape`.
+2. **Mojibake que sobrevivía incluso con la decodificación UTF-8 ya arreglada**: no
+   era un bug nuestro esta vez — algunos avisos de RemoteOK ya vienen corruptos desde
+   el origen (antes de que los toquemos). Se agregó `ftfy` (librería hecha
+   específicamente para reparar mojibake) — best-effort, corrupciones de varias
+   vueltas no siempre se reconstruyen del todo.
+
+Ambos se aplican en `remoteok.py` antes de guardar nada. Script de backfill
+`scripts/clean_raw_text.py` (mismo patrón que `recompute_languages.py`) para
+limpiar los avisos ya guardados sin depender de reingerir. Tests nuevos en
+`test_remoteok.py` (HTML con tags/entidades, mojibake real de origen). 44/44 tests.
+
+## Bug real en "Búsqueda con IA": no estaba colgada, tardaba ~7s en fallar
+
+El usuario reportó que el botón de búsqueda con IA "no hacía nada". Reproducido con
+Playwright contra un backend real: el fetch fallaba (500, sin `VOYAGE_API_KEY` en ese
+momento), pero como el `QueryClient` de React Query no tenía configurado `retry`,
+usaba el default (3 reintentos con backoff exponencial ≈ 1s + 2s + 4s), así que
+tardaba ~7 segundos en mostrar el error — se leía como que estaba colgado, no como un
+fallo. Fix: `retry: 1` en `main.tsx`, y el mensaje de error en `JobInbox.tsx` ahora es
+específico para el modo semántico en vez del genérico compartido con la búsqueda por
+keyword.
+
+De paso se probó a fondo la búsqueda por palabra clave (español, sin resultados, texto
+vacío, volver a la lista completa) contra una base sqlite sembrada a mano — sin bugs,
+funciona bien. La sospecha es que la contaminación con el botón de IA roto generó la
+sensación de que "la búsqueda" en general no andaba.
+
+## Embeddings: de Voyage AI a Ollama local
+
+El usuario no tiene (ni quiere pagar) una API key de Voyage. Mismo criterio que ya se
+aplicó para el chat (Groq/NVIDIA en vez de Anthropic): mover los embeddings a un
+proveedor gratis/local. Se eligió **Ollama** (ya lo tiene corriendo para el chat, en su
+GPU) con el modelo **`mxbai-embed-large`** — elegido puntualmente porque genera
+vectores de **1024 dimensiones**, igual que `EMBEDDING_DIM` en `job_posting.py`, así
+se evita una migración de la columna `vector` en Postgres.
+
+- `embeddings.py` reescrito para usar `AsyncOpenAI` (mismo cliente y patrón que
+  `llm_client.py`) apuntado a `EMBEDDING_BASE_URL` (default
+  `http://localhost:11434/v1`, el endpoint OpenAI-compatible de Ollama) en vez del SDK
+  propio de `voyageai`.
+- `core/config.py`: `embedding_api_key` / `embedding_base_url` / `embedding_model`
+  reemplazan a `voyage_api_key` / `voyage_model`. Mismo criterio que `LLM_*`: cambiar
+  de proveedor es solo cambiar estas tres variables, sin tocar código.
+- Se sacó la dependencia `voyageai` de `pyproject.toml` (ya no hace falta, `openai`
+  cubre chat y embeddings).
+- Tests: `test_embeddings.py` reescrito con fakes con la forma de respuesta de
+  embeddings de OpenAI (`response.data[i].embedding`) en vez de los fakes de
+  `voyageai`. 44/44 tests siguen pasando.
+
+**Pendiente de que el usuario corra**: `ollama pull mxbai-embed-large` (una sola vez,
+descarga el modelo) y confirmar que `POST /search` funciona de punta a punta con avisos
+reales — no se pudo probar contra un Ollama real en este sandbox (no hay Ollama
+instalado acá), solo verificado con mocks + que el cliente apunta al endpoint correcto.

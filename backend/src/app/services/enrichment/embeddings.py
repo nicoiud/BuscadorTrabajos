@@ -1,4 +1,5 @@
-import voyageai
+import openai
+from openai import AsyncOpenAI
 
 from app.core.config import settings
 
@@ -7,8 +8,8 @@ class EmbeddingError(Exception):
     pass
 
 
-def get_client() -> voyageai.AsyncClient:
-    return voyageai.AsyncClient(api_key=settings.voyage_api_key)
+def get_client() -> AsyncOpenAI:
+    return AsyncOpenAI(api_key=settings.embedding_api_key, base_url=settings.embedding_base_url)
 
 
 async def embed_documents(texts: list[str]) -> list[list[float]]:
@@ -17,17 +18,13 @@ async def embed_documents(texts: list[str]) -> list[list[float]]:
         return []
     client = get_client()
     try:
-        result = await client.embed(texts, model=settings.voyage_model, input_type="document")
-    except Exception as exc:
+        response = await client.embeddings.create(model=settings.embedding_model, input=texts)
+    except openai.OpenAIError as exc:
         raise EmbeddingError(f"Error generando embeddings: {exc}") from exc
-    return result.embeddings
+    return [item.embedding for item in response.data]
 
 
 async def embed_query(text: str) -> list[float]:
-    """Embed a user-typed search query. Uses Voyage's asymmetric query mode."""
-    client = get_client()
-    try:
-        result = await client.embed([text], model=settings.voyage_model, input_type="query")
-    except Exception as exc:
-        raise EmbeddingError(f"Error generando embeddings: {exc}") from exc
-    return result.embeddings[0]
+    """Embed a user-typed search query."""
+    embeddings = await embed_documents([text])
+    return embeddings[0]

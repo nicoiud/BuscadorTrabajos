@@ -80,7 +80,7 @@ async def test_enrich_pending_jobs_updates_fields_and_embedding(db_session, monk
 
 
 async def test_enrich_pending_jobs_keeps_extraction_when_embedding_fails(db_session, monkeypatch):
-    # Regresión: si Voyage falla (ej. VOYAGE_API_KEY faltante), antes se perdía el
+    # Regresión: si el proveedor de embeddings falla (ej. Ollama no está corriendo), antes se perdía el
     # análisis de texto que sí había funcionado para todo el lote. Ahora se guarda
     # igual, solo sin embedding.
     job = await _make_pending_job(db_session, "no-embedding", "Backend Engineer")
@@ -90,7 +90,7 @@ async def test_enrich_pending_jobs_keeps_extraction_when_embedding_fails(db_sess
         return _fake_extraction("Backend Engineer")
 
     async def fake_embed(texts):
-        raise EmbeddingError("Voyage API key missing")
+        raise EmbeddingError("Ollama connection refused")
 
     monkeypatch.setattr(pipeline, "extract_job_fields", fake_extract)
     monkeypatch.setattr(pipeline, "embed_documents", fake_embed)
