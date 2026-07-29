@@ -1,7 +1,10 @@
 from dataclasses import dataclass, field
 from typing import Any
 
+import pytest
+
 from app.services.enrichment import embeddings
+from app.services.enrichment.embeddings import EmbeddingError
 
 
 @dataclass
@@ -47,3 +50,22 @@ async def test_embed_query_returns_single_vector(monkeypatch):
 
     assert result == [0.5, 0.6]
     assert fake_client.calls[0]["input_type"] == "query"
+
+
+class FakeFailingVoyageClient:
+    async def embed(self, texts, model, input_type):
+        raise RuntimeError("An API key is required for API-based models.")
+
+
+async def test_embed_documents_wraps_provider_errors(monkeypatch):
+    monkeypatch.setattr(embeddings, "get_client", lambda: FakeFailingVoyageClient())
+
+    with pytest.raises(EmbeddingError):
+        await embeddings.embed_documents(["some job text"])
+
+
+async def test_embed_query_wraps_provider_errors(monkeypatch):
+    monkeypatch.setattr(embeddings, "get_client", lambda: FakeFailingVoyageClient())
+
+    with pytest.raises(EmbeddingError):
+        await embeddings.embed_query("some query")

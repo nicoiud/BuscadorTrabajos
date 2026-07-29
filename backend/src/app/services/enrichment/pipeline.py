@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.models.job_posting import EnrichmentStatus, JobPosting
-from app.services.enrichment.embeddings import embed_documents
+from app.services.enrichment.embeddings import EmbeddingError, embed_documents
 from app.services.enrichment.extractor import ExtractionError, JobExtraction, extract_job_fields
 
 logger = logging.getLogger(__name__)
@@ -64,7 +64,17 @@ async def enrich_pending_jobs(db: AsyncSession, limit: int | None = None) -> Enr
 
     if extracted:
         texts = [_embedding_text(extraction) for _, extraction in extracted]
-        embeddings = await embed_documents(texts)
+        try:
+            embeddings = await embed_documents(texts)
+        except EmbeddingError:
+            # Si Voyage falla (key faltante, rate limit, lo que sea), no perdemos el
+            # análisis de texto que sí funcionó — se guarda sin embedding. Sin
+            # embedding esos avisos no van a aparecer en la búsqueda semántica hasta
+            # que se reintente, pero no se pierde el trabajo ya hecho ni se aborta el
+            # resto del lote.
+            logger.warning("Embedding failed for the batch of %d jobs", len(extracted), exc_info=True)
+            embeddings = [None] * len(extracted)
+
         for (job, _), embedding in zip(extracted, embeddings, strict=True):
             job.embedding = embedding
             job.enrichment_status = EnrichmentStatus.DONE

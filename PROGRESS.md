@@ -46,8 +46,22 @@ original; convenciones de código en `CLAUDE.md`; quickstart en `README.md`.
 > mandar la palabra "null"), reduciendo cuántos avisos disparan el error en primer
 > lugar. 3 tests nuevos cubren esto — incluido uno que reproduce el escenario exacto
 > (un aviso falla, el siguiente en el mismo lote se procesa igual). 31/31 tests.
-> Falta que el usuario confirme que `POST /jobs/enrich` ya no crashea contra los 100
-> avisos reales con este fix.
+>
+> **Tercer bug, mismo lote de pruebas**: el usuario no tiene `VOYAGE_API_KEY`
+> configurada. Al agotarse la cuota diaria gratis de Groq (esperable, no es bug —
+> 100k tokens/día), un aviso individual ya fallaba bien gracias al fix anterior, pero
+> el paso de embeddings (después del loop de extracción, una sola llamada a Voyage
+> para todo el lote) no tenía ninguna protección — `voyageai.error.
+> AuthenticationError` por la key faltante se propagaba sin atrapar y **tiraba abajo
+> el commit entero**, perdiendo el análisis de texto de todos los avisos que sí se
+> habían extraído bien en ese lote (nada se guarda hasta el `db.commit()` final). Fix:
+> `embeddings.py` ahora atrapa cualquier excepción del cliente de Voyage y la traduce
+> a `EmbeddingError`; `pipeline.py` atrapa ese error específicamente y, si pasa, guarda
+> igual los campos extraídos (`enrichment_status=done`) con `embedding=None` en vez de
+> perder todo el lote — esos avisos no van a salir en búsqueda semántica hasta un
+> reintento futuro, pero no se pierde el trabajo. 3 tests nuevos. 34/34 tests. Falta
+> que el usuario confirme que `POST /jobs/enrich` ya no pierde el lote cuando falla el
+> embedding (con o sin `VOYAGE_API_KEY` configurada).
 
 ## Ya creado
 

@@ -5,6 +5,7 @@ from sqlalchemy import select
 from app.models.job_posting import EnrichmentStatus, JobLanguage, JobPosting, JobRegion
 from app.models.source import Source, SourceLanguage, SourceRegion, SourceType
 from app.services.enrichment import pipeline
+from app.services.enrichment.embeddings import EmbeddingError
 from app.services.enrichment.extractor import ExtractionError, JobExtraction
 
 
@@ -76,6 +77,35 @@ async def test_enrich_pending_jobs_updates_fields_and_embedding(db_session, monk
     assert job.title_normalized == "Backend Engineer"
     assert job.requirements == ["Python", "SQL"]
     assert job.embedding == [0.1, 0.1, 0.1]
+
+
+async def test_enrich_pending_jobs_keeps_extraction_when_embedding_fails(db_session, monkeypatch):
+    # Regresión: si Voyage falla (ej. VOYAGE_API_KEY faltante), antes se perdía el
+    # análisis de texto que sí había funcionado para todo el lote. Ahora se guarda
+    # igual, solo sin embedding.
+    job = await _make_pending_job(db_session, "no-embedding", "Backend Engineer")
+    await db_session.commit()
+
+    async def fake_extract(title_raw, company_raw, description_raw):
+        return _fake_extraction("Backend Engineer")
+
+    async def fake_embed(texts):
+        raise EmbeddingError("Voyage API key missing")
+
+    monkeypatch.setattr(pipeline, "extract_job_fields", fake_extract)
+    monkeypatch.setattr(pipeline, "embed_documents", fake_embed)
+
+    result = await pipeline.enrich_pending_jobs(db_session, limit=10)
+
+    assert result.processed == 1
+    assert result.enriched == 1
+    assert result.failed == 0
+
+    await db_session.refresh(job)
+    assert job.enrichment_status == EnrichmentStatus.DONE
+    assert job.title_normalized == "Backend Engineer"
+    assert job.requirements == ["Python", "SQL"]
+    assert job.embedding is None
 
 
 async def test_enrich_pending_jobs_marks_failed_on_extraction_error(db_session, monkeypatch):
