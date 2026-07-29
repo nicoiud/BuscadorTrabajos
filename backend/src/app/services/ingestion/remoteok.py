@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 
 import httpx
@@ -19,7 +20,11 @@ class RemoteOkAdapter(SourceAdapter):
         async with httpx.AsyncClient(timeout=15.0) as client:
             response = await client.get(REMOTEOK_API_URL, headers=headers)
             response.raise_for_status()
-            payload = response.json()
+            # RemoteOK no siempre declara `charset=utf-8` en el Content-Type, y la
+            # detección automática de httpx puede terminar decodificando los bytes
+            # UTF-8 como Latin-1 (mojibake tipo "Ã¡" en vez de "á"). Forzamos UTF-8
+            # explícitamente en vez de confiar en response.json().
+            payload = json.loads(response.content.decode("utf-8"))
 
         postings: list[RawJobPosting] = []
         for entry in payload:

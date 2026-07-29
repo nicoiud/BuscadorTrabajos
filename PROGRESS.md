@@ -88,6 +88,33 @@ original; convenciones de código en `CLAUDE.md`; quickstart en `README.md`.
 >
 > Falta que el usuario confirme que `POST /jobs/enrich?limit=100` corre completo
 > contra Ollama sin romperse en este dato puntual.
+>
+> **Quinto bug**: el usuario mandó una captura del frontend real (`JobInbox`) mostrando
+> texto corrupto tipo `"Udesc Faed terÃ¡ atividades..."`, `"Engenharia de PetrÃ³leo"`,
+> `"DescriÃ§Ã£o da vaga"` — el patrón clásico de bytes UTF-8 (`á` = `0xC3 0xA1`)
+> decodificados como si fueran Latin-1 (cada byte se convierte en un carácter propio:
+> `Ã` + `¡`). Al principio le dije al usuario que era solo un artefacto de la consola
+> de Windows (code page del `cmd`) — **estaba mal**: la misma corrupción aparecía en el
+> HTML renderizado en un browser real, así que era un bug de datos, no de terminal.
+> Causa: `services/ingestion/remoteok.py` llamaba `response.json()` de `httpx`, que
+> decide el charset de la respuesta por auto-detección cuando el `Content-Type` no trae
+> `charset=utf-8` explícito (que es el caso de la API pública de RemoteOK) — y en este
+> caso adivinó mal. Fix: reemplazar `response.json()` por
+> `json.loads(response.content.decode("utf-8"))`, forzando UTF-8 sin ambigüedad en vez
+> de confiar en la heurística de httpx. Test nuevo (`test_fetch_decodes_utf8_body_
+> without_explicit_charset_header`) que arma la respuesta mockeada con bytes UTF-8 y un
+> header `Content-Type: application/json` sin charset — reproduce el bug tal cual pasaba
+> en RemoteOK y falla sin el fix. 39/39 tests.
+>
+> **Importante para el usuario**: este fix corrige la ingestion *de acá en adelante*.
+> Los ~100 avisos que ya están en su Postgres se ingirieron con el bug activo, así que
+> su texto (`title_raw`, `company_raw`, `description_raw`, y todo lo derivado de ahí por
+> el enrichment) va a seguir corrupto — no se autorepara solo. Como el dedup es por
+> `(source_id, external_id)`, volver a correr `POST /jobs/ingest/remoteok` va a
+> actualizar (no duplicar) esos mismos registros con el texto ya bien decodificado. Los
+> avisos que ya estén `enrichment_status=done` con datos IA derivados del texto corrupto
+> van a necesitar pasar de nuevo por `POST /jobs/enrich` después del re-ingest para que
+> `title_normalized`/`summary`/etc. también se regeneren limpios.
 
 ## Ya creado
 

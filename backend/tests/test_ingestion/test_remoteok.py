@@ -1,3 +1,5 @@
+import json
+
 import respx
 from httpx import Response
 
@@ -19,6 +21,33 @@ async def test_fetch_parses_postings_and_skips_legal_notice(remoteok_api_fixture
     assert first.language == JobLanguage.EN
     assert first.region == JobRegion.REMOTE_INTL
     assert first.posted_at is not None
+
+
+@respx.mock
+async def test_fetch_decodes_utf8_body_without_explicit_charset_header():
+    # RemoteOK responde con Content-Type: application/json sin `charset=utf-8`.
+    # Si se confía en la detección automática de httpx, esto puede terminar
+    # decodificando los bytes UTF-8 como Latin-1 (mojibake: "Ã©" en vez de "é").
+    payload = [
+        {"legal": "notice"},
+        {
+            "id": "42",
+            "position": "Ingeniero de Operación",
+            "company": "Compañía Ñu",
+            "description": "Descrição da vaga com acentuação",
+        },
+    ]
+    body = json.dumps(payload).encode("utf-8")
+    respx.get(REMOTEOK_API_URL).mock(
+        return_value=Response(200, content=body, headers={"Content-Type": "application/json"})
+    )
+
+    postings = await RemoteOkAdapter().fetch()
+
+    assert len(postings) == 1
+    assert postings[0].title == "Ingeniero de Operación"
+    assert postings[0].company == "Compañía Ñu"
+    assert postings[0].description == "Descrição da vaga com acentuação"
 
 
 @respx.mock
