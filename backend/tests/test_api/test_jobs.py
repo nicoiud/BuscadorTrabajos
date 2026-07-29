@@ -1,7 +1,9 @@
 import respx
 from httpx import Response
+from sqlalchemy import select
 
 from app.api.v1 import jobs as jobs_api
+from app.models.job_posting import EnrichmentStatus, JobPosting
 from app.services.enrichment.cover_letter import CoverLetterDraft
 from app.services.enrichment.pipeline import EnrichResult
 from app.services.ingestion.remoteok import REMOTEOK_API_URL
@@ -47,6 +49,23 @@ async def test_list_jobs_filters_by_keyword(client, remoteok_api_fixture):
     body = response.json()
     assert body["total"] == 1
     assert body["items"][0]["title_raw"] == "Senior Backend Engineer"
+
+
+@respx.mock
+async def test_list_jobs_filters_by_enrichment_status(client, db_session, remoteok_api_fixture):
+    respx.get(REMOTEOK_API_URL).mock(return_value=Response(200, json=remoteok_api_fixture))
+    await client.post("/api/v1/jobs/ingest/remoteok")
+
+    jobs = (await db_session.execute(select(JobPosting))).scalars().all()
+    jobs[0].enrichment_status = EnrichmentStatus.DONE
+    await db_session.commit()
+
+    response = await client.get("/api/v1/jobs", params={"enrichment_status": "done"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 1
+    assert body["items"][0]["enrichment_status"] == "done"
 
 
 async def test_list_jobs_rejects_invalid_limit(client):

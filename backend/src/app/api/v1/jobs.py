@@ -5,7 +5,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
-from app.models.job_posting import JobLanguage, JobPosting, JobRegion
+from app.models.job_posting import EnrichmentStatus, JobLanguage, JobPosting, JobRegion
 from app.schemas.job import (
     CoverLetterOut,
     CoverLetterRequest,
@@ -28,6 +28,7 @@ async def list_jobs(
     q: str | None = Query(default=None, description="Búsqueda por palabra clave"),
     region: JobRegion | None = Query(default=None),
     language: JobLanguage | None = Query(default=None),
+    enrichment_status: EnrichmentStatus | None = Query(default=None),
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
 ) -> JobPostingList:
@@ -41,6 +42,8 @@ async def list_jobs(
         filters.append(JobPosting.region == region)
     if language:
         filters.append(JobPosting.language == language)
+    if enrichment_status:
+        filters.append(JobPosting.enrichment_status == enrichment_status)
 
     total_stmt = select(func.count()).select_from(JobPosting).where(*filters)
     total = (await db.execute(total_stmt)).scalar_one()
