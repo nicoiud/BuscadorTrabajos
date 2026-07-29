@@ -51,6 +51,27 @@ async def test_fetch_decodes_utf8_body_without_explicit_charset_header():
 
 
 @respx.mock
+async def test_fetch_detects_real_language_instead_of_hardcoding_english():
+    # Regresión: RemoteOK trae avisos en varios idiomas (predominantemente inglés,
+    # pero también portugués de empresas brasileñas); el adapter mandaba "en" fijo
+    # sin mirar el contenido real.
+    payload = [
+        {"legal": "notice"},
+        {
+            "id": "1",
+            "position": "Engenheiro de Software",
+            "company": "Empresa Brasileira",
+            "description": "Vaga para desenvolvedor backend com experiência em Python.",
+        },
+    ]
+    respx.get(REMOTEOK_API_URL).mock(return_value=Response(200, json=payload))
+
+    postings = await RemoteOkAdapter().fetch()
+
+    assert postings[0].language == JobLanguage.PT
+
+
+@respx.mock
 async def test_fetch_handles_malformed_entries_gracefully():
     payload = [
         {"legal": "notice"},

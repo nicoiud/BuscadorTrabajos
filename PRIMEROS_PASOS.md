@@ -158,3 +158,43 @@ NVIDIA en `backend/.env` (ver `.env.example`, tiene ambas opciones comentadas) y
 extensión contra el proveedor real — no se pudo probar con una key real en este
 sandbox (no hay red de salida a Groq/NVIDIA ni las credenciales), así que esta parte
 solo está verificada con mocks.
+
+## Preferencias de búsqueda: idiomas + ciudad para modalidad presencial
+
+El usuario reportó que los avisos de RemoteOK vienen en varios idiomas (no solo
+inglés) y quería poder filtrarlos, y además que los avisos presenciales solo se
+muestren si están en Ciudad Autónoma de Buenos Aires — ambos configurables desde la
+UI, no hardcodeados.
+
+- **Idioma real, no hardcodeado**: `remoteok.py` mandaba `language=JobLanguage.EN`
+  fijo para todos los avisos, sin mirar el contenido — por eso el usuario veía avisos
+  en portugués clasificados como inglés. Se agregó `services/ingestion/
+  language_detection.py` con `detect_job_language()`, que usa la librería `langdetect`
+  (heurística estadística local, determinística con `DetectorFactory.seed = 0`, sin
+  llamar a ningún proveedor de IA — no viola la regla de CLAUDE.md de no meter
+  llamadas a Claude/Voyage en un adapter). Se agregaron `JobLanguage.PT` y
+  `JobLanguage.OTHER` al enum (migración `0002_job_language_pt_other.py`, `ALTER TYPE
+  ... ADD VALUE IF NOT EXISTS` — Postgres no soporta downgrade de valores de enum sin
+  recrear el tipo, documentado como tal).
+- **Filtro por idioma + ubicación presencial**: nuevo `services/search/filters.py`
+  con `build_job_filters(languages, onsite_location)`, compartido entre `GET /jobs`
+  (ahora acepta `languages` repetido y `onsite_location`) y `POST /search` (mismos
+  campos en el body). La regla de ubicación es: si `modality == onsite`, solo pasa si
+  `location_raw` contiene el texto configurado; avisos remotos/híbridos o sin
+  modalidad todavía (enrichment pendiente) nunca se filtran por esto.
+- **UI**: `usePreferences.ts` (mismo patrón localStorage que el perfil) guarda
+  `languages` (default `["es","en"]`) y `onsiteLocation` (default "Ciudad Autónoma de
+  Buenos Aires, Argentina") + un toggle para activar/desactivar esa restricción.
+  Panel nuevo `SearchPreferencesPanel.tsx`, accesible desde el botón "Preferencias" en
+  `JobInbox`. Cada fetch (keyword y semántica) manda las preferencias vigentes.
+- Tests nuevos: detección de idioma real en `test_remoteok.py` (portugués), filtro por
+  idioma y por ubicación presencial en `test_jobs.py` (incluye el caso "no afecta
+  avisos remotos"). 42/42 tests backend. Frontend: `tsc --noEmit` y `npm run build`
+  pasan limpio.
+
+**Importante para el usuario, mismo patrón que el fix de encoding**: el campo
+`language` de los ~100 avisos ya ingeridos quedó grabado como `en` a secas (el bug
+viejo), así que el filtro por idioma no les va a pegar bien hasta reingestar. Después
+de levantar el backend con esta migración aplicada (`alembic upgrade head`), correr
+`POST /jobs/ingest/remoteok` de nuevo para que el dedup por `(source_id, external_id)`
+actualice el idioma real de cada aviso ya existente.

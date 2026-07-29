@@ -3,7 +3,7 @@ from httpx import Response
 from sqlalchemy import select
 
 from app.api.v1 import jobs as jobs_api
-from app.models.job_posting import EnrichmentStatus, JobPosting
+from app.models.job_posting import EnrichmentStatus, JobLanguage, JobPosting, Modality
 from app.services.enrichment.cover_letter import CoverLetterDraft
 from app.services.enrichment.pipeline import EnrichResult
 from app.services.ingestion.remoteok import REMOTEOK_API_URL
@@ -66,6 +66,71 @@ async def test_list_jobs_filters_by_enrichment_status(client, db_session, remote
     body = response.json()
     assert body["total"] == 1
     assert body["items"][0]["enrichment_status"] == "done"
+
+
+@respx.mock
+async def test_list_jobs_filters_by_languages(client, db_session, remoteok_api_fixture):
+    respx.get(REMOTEOK_API_URL).mock(return_value=Response(200, json=remoteok_api_fixture))
+    await client.post("/api/v1/jobs/ingest/remoteok")
+
+    jobs = (await db_session.execute(select(JobPosting))).scalars().all()
+    jobs[0].language = JobLanguage.PT
+    jobs[1].language = JobLanguage.EN
+    await db_session.commit()
+
+    response = await client.get("/api/v1/jobs", params={"languages": ["en"]})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 1
+    assert body["items"][0]["language"] == "en"
+
+
+@respx.mock
+async def test_list_jobs_onsite_location_filter_excludes_onsite_jobs_elsewhere(
+    client, db_session, remoteok_api_fixture
+):
+    respx.get(REMOTEOK_API_URL).mock(return_value=Response(200, json=remoteok_api_fixture))
+    await client.post("/api/v1/jobs/ingest/remoteok")
+
+    jobs = (await db_session.execute(select(JobPosting))).scalars().all()
+    onsite_wrong_city, onsite_caba = jobs
+    onsite_wrong_city.modality = Modality.ONSITE
+    onsite_wrong_city.location_raw = "Madrid, España"
+    onsite_caba.modality = Modality.ONSITE
+    onsite_caba.location_raw = "Ciudad Autónoma de Buenos Aires, Argentina"
+    await db_session.commit()
+
+    response = await client.get(
+        "/api/v1/jobs", params={"onsite_location": "Ciudad Autónoma de Buenos Aires"}
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 1
+    assert body["items"][0]["id"] == str(onsite_caba.id)
+
+
+@respx.mock
+async def test_list_jobs_onsite_location_filter_does_not_affect_remote_jobs(
+    client, db_session, remoteok_api_fixture
+):
+    respx.get(REMOTEOK_API_URL).mock(return_value=Response(200, json=remoteok_api_fixture))
+    await client.post("/api/v1/jobs/ingest/remoteok")
+
+    jobs = (await db_session.execute(select(JobPosting))).scalars().all()
+    jobs[0].modality = Modality.REMOTE
+    jobs[0].location_raw = "Worldwide"
+    await db_session.commit()
+
+    response = await client.get(
+        "/api/v1/jobs", params={"onsite_location": "Ciudad Autónoma de Buenos Aires"}
+    )
+
+    assert response.status_code == 200
+    # Los dos avisos siguen — uno es remoto (no aplica el filtro) y el otro todavía
+    # no tiene modalidad determinada (enrichment pendiente).
+    assert response.json()["total"] == 2
 
 
 async def test_list_jobs_rejects_invalid_limit(client):

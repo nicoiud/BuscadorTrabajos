@@ -25,7 +25,7 @@ async def test_semantic_search_embeds_query_and_returns_ranked_jobs(client, monk
         assert text == "remote python backend"
         return [0.1, 0.2, 0.3]
 
-    async def fake_semantic_search(db, query_embedding, limit):
+    async def fake_semantic_search(db, query_embedding, limit, extra_filters=None):
         assert query_embedding == [0.1, 0.2, 0.3]
         assert limit == 5
         return [_fake_job("Backend Engineer")]

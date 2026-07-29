@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 
 import { JobDetailPanel } from "../components/JobDetailPanel";
 import { JobListRow } from "../components/JobListRow";
+import { SearchPreferencesPanel } from "../components/SearchPreferencesPanel";
 import { useJobs, useTriggerEnrichment, useTriggerIngestion, type SearchMode } from "../hooks/useJobs";
+import { usePreferences } from "../hooks/usePreferences";
 import { useProfile } from "../hooks/useProfile";
 import { useSelectedJobs } from "../hooks/useSelectedJobs";
 
@@ -11,8 +13,10 @@ export function JobInbox() {
   const [mode, setMode] = useState<SearchMode>("keyword");
   const [openJobId, setOpenJobId] = useState<string | null>(null);
   const [showProfile, setShowProfile] = useState(false);
+  const [showPreferences, setShowPreferences] = useState(false);
 
-  const { data, isLoading, isError } = useJobs(query, mode);
+  const { preferences, setPreferences } = usePreferences();
+  const { data, isLoading, isError } = useJobs(query, mode, preferences);
   const ingestion = useTriggerIngestion();
   const enrichment = useTriggerEnrichment();
   const { isSelected, toggle, count: selectedCount } = useSelectedJobs();
@@ -45,6 +49,12 @@ export function JobInbox() {
               Mi perfil
             </button>
             <button
+              onClick={() => setShowPreferences((v) => !v)}
+              className="rounded-md bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200"
+            >
+              Preferencias
+            </button>
+            <button
               onClick={() => ingestion.mutate()}
               disabled={ingestion.isPending}
               className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
@@ -75,6 +85,10 @@ export function JobInbox() {
               className="w-full rounded-md border border-slate-300 p-2 text-sm focus:border-slate-500 focus:outline-none"
             />
           </div>
+        )}
+
+        {showPreferences && (
+          <SearchPreferencesPanel preferences={preferences} onChange={setPreferences} />
         )}
 
         <div className="flex gap-2">

@@ -7,13 +7,15 @@ import {
   triggerEnrichment,
   triggerRemoteOkIngestion,
 } from "../api/jobs";
+import type { SearchPreferences } from "./usePreferences";
 
 export type SearchMode = "keyword" | "semantic";
 
-export function useJobs(query: string, mode: SearchMode) {
+export function useJobs(query: string, mode: SearchMode, preferences: SearchPreferences) {
   return useQuery({
-    queryKey: ["jobs", mode, query],
-    queryFn: () => (mode === "semantic" ? semanticSearchJobs(query) : fetchJobs(query)),
+    queryKey: ["jobs", mode, query, preferences],
+    queryFn: () =>
+      mode === "semantic" ? semanticSearchJobs(query, preferences) : fetchJobs(query, preferences),
     enabled: mode === "keyword" || query.trim().length > 0,
   });
 }

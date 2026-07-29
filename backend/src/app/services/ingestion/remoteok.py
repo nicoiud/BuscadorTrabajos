@@ -4,8 +4,9 @@ from datetime import datetime
 import httpx
 
 from app.core.config import settings
-from app.models.job_posting import JobLanguage, JobRegion
+from app.models.job_posting import JobRegion
 from app.services.ingestion.base import RawJobPosting, SourceAdapter
+from app.services.ingestion.language_detection import detect_job_language
 
 REMOTEOK_API_URL = "https://remoteok.com/api"
 
@@ -44,13 +45,18 @@ class RemoteOkAdapter(SourceAdapter):
             except ValueError:
                 posted_at = None
 
+        title = entry.get("position", "").strip()
+        description = entry.get("description", "") or ""
+
         return RawJobPosting(
             external_id=str(entry["id"]),
             url=entry.get("url") or f"https://remoteok.com/remote-jobs/{entry['id']}",
-            title=entry.get("position", "").strip(),
+            title=title,
             company=entry.get("company", "").strip(),
-            description=entry.get("description", "") or "",
-            language=JobLanguage.EN,
+            description=description,
+            # RemoteOK agrega avisos en varios idiomas (predominantemente inglés,
+            # pero también portugués y español) — no se puede asumir "en" a ciegas.
+            language=detect_job_language(title, description),
             region=JobRegion.REMOTE_INTL,
             location=entry.get("location") or None,
             posted_at=posted_at,

@@ -18,6 +18,7 @@ from app.services.enrichment.cover_letter import generate_cover_letter
 from app.services.enrichment.pipeline import enrich_pending_jobs
 from app.services.ingestion.remoteok import RemoteOkAdapter
 from app.services.ingestion.runner import ingest_source
+from app.services.search.filters import build_job_filters
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
@@ -27,7 +28,10 @@ async def list_jobs(
     db: AsyncSession = Depends(get_db),
     q: str | None = Query(default=None, description="Búsqueda por palabra clave"),
     region: JobRegion | None = Query(default=None),
-    language: JobLanguage | None = Query(default=None),
+    languages: list[JobLanguage] = Query(default=[], description="Idiomas permitidos; vacío = todos"),
+    onsite_location: str | None = Query(
+        default=None, description="Si un aviso es presencial, exige que la ubicación matchee este texto"
+    ),
     enrichment_status: EnrichmentStatus | None = Query(default=None),
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
@@ -40,10 +44,9 @@ async def list_jobs(
         )
     if region:
         filters.append(JobPosting.region == region)
-    if language:
-        filters.append(JobPosting.language == language)
     if enrichment_status:
         filters.append(JobPosting.enrichment_status == enrichment_status)
+    filters.extend(build_job_filters(languages, onsite_location))
 
     total_stmt = select(func.count()).select_from(JobPosting).where(*filters)
     total = (await db.execute(total_stmt)).scalar_one()

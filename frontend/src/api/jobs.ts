@@ -1,3 +1,5 @@
+import type { SearchPreferences } from "../hooks/usePreferences";
+
 export interface JobPosting {
   id: string;
   title_raw: string;
@@ -6,7 +8,7 @@ export interface JobPosting {
   url: string;
   location_raw: string | null;
   posted_at: string | null;
-  language: "es" | "en";
+  language: "es" | "en" | "pt" | "other";
   region: "latam" | "remote_intl" | "other";
 
   title_normalized: string | null;
@@ -46,9 +48,14 @@ export interface CoverLetterDraft {
 
 const API_BASE = "/api/v1";
 
-export async function fetchJobs(query: string): Promise<JobPostingList> {
+export async function fetchJobs(query: string, preferences: SearchPreferences): Promise<JobPostingList> {
   const params = new URLSearchParams();
   if (query.trim()) params.set("q", query.trim());
+  for (const lang of preferences.languages) params.append("languages", lang);
+  const onsiteLocation = preferences.onsiteLocation.trim();
+  if (preferences.restrictOnsiteLocation && onsiteLocation) {
+    params.set("onsite_location", onsiteLocation);
+  }
 
   const response = await fetch(`${API_BASE}/jobs?${params.toString()}`);
   if (!response.ok) {
@@ -57,11 +64,21 @@ export async function fetchJobs(query: string): Promise<JobPostingList> {
   return response.json();
 }
 
-export async function semanticSearchJobs(query: string, limit = 20): Promise<JobPostingList> {
+export async function semanticSearchJobs(
+  query: string,
+  preferences: SearchPreferences,
+  limit = 20,
+): Promise<JobPostingList> {
+  const onsiteLocation = preferences.onsiteLocation.trim();
   const response = await fetch(`${API_BASE}/search`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ query, limit }),
+    body: JSON.stringify({
+      query,
+      limit,
+      languages: preferences.languages,
+      onsite_location: preferences.restrictOnsiteLocation && onsiteLocation ? onsiteLocation : null,
+    }),
   });
   if (!response.ok) {
     throw new Error(`Error en la búsqueda semántica: ${response.status}`);

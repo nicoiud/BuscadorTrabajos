@@ -40,6 +40,8 @@ def _enum(python_enum_cls: type[enum.Enum], name: str) -> Enum:
 class JobLanguage(str, enum.Enum):
     ES = "es"
     EN = "en"
+    PT = "pt"
+    OTHER = "other"
 
 
 class JobRegion(str, enum.Enum):

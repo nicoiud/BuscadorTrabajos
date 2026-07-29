@@ -53,6 +53,8 @@ class EnrichResultOut(BaseModel):
 class SemanticSearchRequest(BaseModel):
     query: str
     limit: int = 20
+    languages: list[JobLanguage] = []
+    onsite_location: str | None = None
 
 
 class CoverLetterRequest(BaseModel):
