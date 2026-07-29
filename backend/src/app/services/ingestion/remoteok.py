@@ -7,6 +7,7 @@ from app.core.config import settings
 from app.models.job_posting import JobRegion
 from app.services.ingestion.base import RawJobPosting, SourceAdapter
 from app.services.ingestion.language_detection import detect_job_language
+from app.services.ingestion.text_cleaning import clean_raw_text, clean_raw_text_inline
 
 REMOTEOK_API_URL = "https://remoteok.com/api"
 
@@ -45,19 +46,26 @@ class RemoteOkAdapter(SourceAdapter):
             except ValueError:
                 posted_at = None
 
-        title = entry.get("position", "").strip()
-        description = entry.get("description", "") or ""
+        # RemoteOK devuelve título/empresa/descripción con HTML crudo (`<br>`, `<p>`,
+        # entidades como `&amp;`) y, en algunos avisos, texto ya corrupto por un mal
+        # manejo de encoding aguas arriba (mojibake que no se origina en nuestro
+        # propio parseo) — se limpian los dos acá, antes de guardar nada.
+        title = clean_raw_text_inline(entry.get("position", ""))
+        company = clean_raw_text_inline(entry.get("company", ""))
+        description = clean_raw_text(entry.get("description", "") or "")
+        location = entry.get("location")
+        location = clean_raw_text_inline(location) if location else None
 
         return RawJobPosting(
             external_id=str(entry["id"]),
             url=entry.get("url") or f"https://remoteok.com/remote-jobs/{entry['id']}",
             title=title,
-            company=entry.get("company", "").strip(),
+            company=company,
             description=description,
             # RemoteOK agrega avisos en varios idiomas (predominantemente inglés,
             # pero también portugués y español) — no se puede asumir "en" a ciegas.
             language=detect_job_language(title, description),
             region=JobRegion.REMOTE_INTL,
-            location=entry.get("location") or None,
+            location=location or None,
             posted_at=posted_at,
         )
