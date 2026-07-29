@@ -114,10 +114,33 @@ def empty_response() -> FakeChatCompletion:
     return FakeChatCompletion(choices=[FakeChoice(message=FakeChoiceMessage())])
 
 
+class FakeChatCompletionsError:
+    """Simula un proveedor rechazando la llamada (ej. Groq con 400 tool_use_failed
+    cuando el modelo devuelve datos que no matchean el schema)."""
+
+    async def create(self, **kwargs: Any):
+        import openai
+
+        raise openai.OpenAIError("simulated provider error")
+
+
+class FakeOpenAIErrorClient:
+    def __init__(self):
+        self.chat = type("_Chat", (), {"completions": FakeChatCompletionsError()})()
+
+
 @pytest.fixture
 def patch_llm(monkeypatch):
     def _patch(response: FakeChatCompletion) -> None:
         monkeypatch.setattr(llm_client, "get_client", lambda: FakeOpenAIClient(response))
+
+    return _patch
+
+
+@pytest.fixture
+def patch_llm_error(monkeypatch):
+    def _patch() -> None:
+        monkeypatch.setattr(llm_client, "get_client", lambda: FakeOpenAIErrorClient())
 
     return _patch
 

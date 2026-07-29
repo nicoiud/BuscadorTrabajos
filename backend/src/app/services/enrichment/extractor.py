@@ -17,10 +17,12 @@ _EXTRACTION_SCHEMA = {
             "seniority": {
                 "type": "string",
                 "enum": ["junior", "mid", "senior", "lead", "exec"],
+                "description": "Omitir este campo por completo si el aviso no da para inferirlo con confianza.",
             },
             "modality": {
                 "type": "string",
                 "enum": ["remote", "hybrid", "onsite"],
+                "description": "Omitir este campo por completo si el aviso no da para inferirlo con confianza.",
             },
             "salary_min": {"type": ["integer", "null"], "description": "Salario mínimo si se menciona, sino null."},
             "salary_max": {"type": ["integer", "null"], "description": "Salario máximo si se menciona, sino null."},
@@ -38,8 +40,6 @@ _EXTRACTION_SCHEMA = {
         "required": [
             "title_normalized",
             "company_normalized",
-            "seniority",
-            "modality",
             "requirements",
             "summary",
         ],
@@ -50,8 +50,10 @@ _SYSTEM_PROMPT = (
     "Sos un extractor de datos estructurados para avisos de empleo. Analizás el "
     "título, empresa y descripción de un aviso (puede estar en español o inglés, y "
     "puede tener HTML/formato desprolijo) y llamás a la función "
-    f"'{EXTRACTION_TOOL_NAME}' con los campos normalizados. No inventes salario si no "
-    "está explícito en el texto — usá null."
+    f"'{EXTRACTION_TOOL_NAME}' con los campos normalizados. No inventes salario, "
+    "seniority ni modalidad si no están explícitos o claramente implícitos en el "
+    "texto — omití esos campos del todo en ese caso. Nunca uses la palabra 'null' "
+    "como texto; o mandás el valor real, o no incluís el campo."
 )
 
 
@@ -59,10 +61,10 @@ _SYSTEM_PROMPT = (
 class JobExtraction:
     title_normalized: str
     company_normalized: str
-    seniority: str
-    modality: str
     requirements: list[str]
     summary: str
+    seniority: str | None = None
+    modality: str | None = None
     salary_min: int | None = None
     salary_max: int | None = None
     currency: str | None = None
@@ -97,10 +99,10 @@ async def extract_job_fields(
         return JobExtraction(
             title_normalized=data["title_normalized"],
             company_normalized=data["company_normalized"],
-            seniority=data["seniority"],
-            modality=data["modality"],
             requirements=list(data["requirements"]),
             summary=data["summary"],
+            seniority=data.get("seniority"),
+            modality=data.get("modality"),
             salary_min=data.get("salary_min"),
             salary_max=data.get("salary_max"),
             currency=data.get("currency"),

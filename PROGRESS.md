@@ -27,7 +27,27 @@ original; convenciones de código en `CLAUDE.md`; quickstart en `README.md`.
 > in obj]` en cada `Enum(...)` de `models/job_posting.py` y `models/source.py`
 > (encapsulado en un helper `_enum()` en cada archivo). Verificado con
 > `bind_processor()` del dialecto de Postgres directamente (sin Postgres corriendo en
-> este sandbox) — falta que el usuario confirme que ya anda contra su Postgres real.
+> este sandbox), y confirmado por el usuario corriendo `POST /jobs/ingest/remoteok`
+> contra su Postgres real (trajo 100 ofertas).
+>
+> **Segundo bug encontrado, este con datos reales de Groq**: al correr
+> `POST /jobs/enrich` contra los 100 avisos reales de RemoteOK, algunos avisos no
+> traen info suficiente para inferir `seniority`/`modality`, y el modelo a veces
+> respondía `null` o hasta la palabra `"null"` como texto para esos campos —
+> requeridos en nuestro schema, así que Groq rechazaba la tool call entera con 400.
+> Como `llm_client.call_with_tool` no atrapaba errores de la librería `openai`, ese
+> 400 se propagaba sin filtrar hasta el endpoint y **tiraba abajo todo el lote** (los
+> 20 avisos del batch) en vez de marcar solo ese aviso como `failed` y seguir. Fix en
+> dos partes: (1) `llm_client.py` ahora atrapa `openai.OpenAIError` y lo traduce a
+> `LLMError`, que `extractor.py`/`cover_letter.py` ya traducían a su vez a su propia
+> excepción — así el `except` que ya existía en `pipeline.py` por-aviso vuelve a
+> funcionar como se pensó; (2) `seniority`/`modality` pasaron a ser opcionales en el
+> schema y en `JobExtraction` (se instruye al modelo a omitirlos en vez de inventar o
+> mandar la palabra "null"), reduciendo cuántos avisos disparan el error en primer
+> lugar. 3 tests nuevos cubren esto — incluido uno que reproduce el escenario exacto
+> (un aviso falla, el siguiente en el mismo lote se procesa igual). 31/31 tests.
+> Falta que el usuario confirme que `POST /jobs/enrich` ya no crashea contra los 100
+> avisos reales con este fix.
 
 ## Ya creado
 

@@ -1,5 +1,6 @@
 import json
 
+import openai
 from openai import AsyncOpenAI
 
 from app.core.config import settings
@@ -23,24 +24,32 @@ async def call_with_tool(
     mismo en los tres.
     """
     client = get_client()
-    response = await client.chat.completions.create(
-        model=settings.llm_model,
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_message},
-        ],
-        tools=[
-            {
-                "type": "function",
-                "function": {
-                    "name": tool_name,
-                    "description": tool_schema.get("description", ""),
-                    "parameters": tool_schema["parameters"],
-                },
-            }
-        ],
-        tool_choice={"type": "function", "function": {"name": tool_name}},
-    )
+    try:
+        response = await client.chat.completions.create(
+            model=settings.llm_model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_message},
+            ],
+            tools=[
+                {
+                    "type": "function",
+                    "function": {
+                        "name": tool_name,
+                        "description": tool_schema.get("description", ""),
+                        "parameters": tool_schema["parameters"],
+                    },
+                }
+            ],
+            tool_choice={"type": "function", "function": {"name": tool_name}},
+        )
+    except openai.OpenAIError as exc:
+        # Algunos modelos devuelven datos que no matchean el schema (ej. "null" como
+        # string en vez de null real) y el proveedor rechaza la llamada con 400 antes
+        # de que lleguemos a parsear nada. Un aviso raro no puede tirar abajo todo el
+        # lote — el caller (pipeline.py) atrapa LLMError y marca ese aviso puntual
+        # como failed, sigue con el resto.
+        raise LLMError(f"Error llamando al modelo: {exc}") from exc
 
     tool_calls = response.choices[0].message.tool_calls
     if not tool_calls:
@@ -54,13 +63,17 @@ async def call_with_tool(
 
 async def call_text(system_prompt: str, user_message: str, max_tokens: int = 500) -> str:
     client = get_client()
-    response = await client.chat.completions.create(
-        model=settings.llm_model,
-        max_tokens=max_tokens,
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_message},
-        ],
-    )
+    try:
+        response = await client.chat.completions.create(
+            model=settings.llm_model,
+            max_tokens=max_tokens,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_message},
+            ],
+        )
+    except openai.OpenAIError as exc:
+        raise LLMError(f"Error llamando al modelo: {exc}") from exc
+
     content = response.choices[0].message.content
     return content.strip() if content else ""
