@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     # que hable el mismo protocolo — solo cambian estas tres variables, no el código.
     llm_api_key: str = ""
     llm_base_url: str = "https://api.groq.com/openai/v1"
-    llm_model: str = "llama-3.1-70b-versatile"
+    llm_model: str = "llama-3.3-70b-versatile"
 
     voyage_api_key: str = ""
     voyage_model: str = "voyage-3"

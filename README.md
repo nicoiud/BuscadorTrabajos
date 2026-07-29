@@ -88,7 +88,7 @@ autofill de la extensión necesitan:
 - `LLM_API_KEY` + `LLM_BASE_URL` + `LLM_MODEL` — cualquier proveedor compatible con la
   API de chat completions de OpenAI. Probado con:
   - **Groq** (gratis): `LLM_BASE_URL=https://api.groq.com/openai/v1`,
-    `LLM_MODEL=llama-3.1-70b-versatile`.
+    `LLM_MODEL=llama-3.3-70b-versatile`.
   - **NVIDIA API Catalog** (gratis): `LLM_BASE_URL=https://integrate.api.nvidia.com/v1`,
     `LLM_MODEL=meta/llama-3.1-70b-instruct`.
   - No hace falta tocar código para cambiar de uno a otro, solo estas tres variables.
