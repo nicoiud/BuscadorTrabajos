@@ -5,7 +5,14 @@ import ReactDOM from "react-dom/client";
 import { App } from "./App";
 import "./index.css";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    // Default es 3 reintentos con backoff exponencial (~7s) antes de mostrar el
+    // error — con un solo backend local eso hace que un fallo real (ej. falta la
+    // VOYAGE_API_KEY) se vea como que "no pasa nada" en vez de fallar rápido.
+    queries: { retry: 1 },
+  },
+});
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

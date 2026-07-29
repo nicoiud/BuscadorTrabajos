@@ -143,7 +143,13 @@ export function JobInbox() {
             <p className="p-4 text-sm text-slate-500">Escribí qué tipo de trabajo buscás.</p>
           )}
           {isLoading && <p className="p-4 text-sm text-slate-500">Cargando...</p>}
-          {isError && <p className="p-4 text-sm text-red-600">No se pudieron cargar las ofertas.</p>}
+          {isError && (
+            <p className="p-4 text-sm text-red-600">
+              {mode === "semantic"
+                ? "No se pudo hacer la búsqueda con IA. Revisá que el backend tenga configurada VOYAGE_API_KEY."
+                : "No se pudieron cargar las ofertas."}
+            </p>
+          )}
 
           {data && items.length === 0 && !isLoading && (
             <p className="p-4 text-sm text-slate-500">
