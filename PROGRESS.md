@@ -15,6 +15,19 @@ original; convenciones de código en `CLAUDE.md`; quickstart en `README.md`.
 > Anthropic — ver `LLM_API_KEY`/`LLM_BASE_URL`/`LLM_MODEL` en `.env.example` y el
 > registro correspondiente en `PRIMEROS_PASOS.md`. El resto de las decisiones
 > (tool-calling forzado, batching, etc.) sigue vigente, solo cambió el proveedor.
+>
+> **Bug encontrado al correr contra Postgres real** (justo el tipo de cosa que este
+> archivo advertía que podía pasar sin Postgres disponible para probar en el sandbox):
+> los modelos con columnas `Enum(...)` mandaban el `.name` de los enums de Python
+> (`"PENDING"`, mayúscula) en vez del `.value` (`"pending"`, como los creó la
+> migración) — rompía con `invalid input value for enum`. En SQLite no se notaba
+> porque los tests crean el schema con `Base.metadata.create_all()`, que genera su
+> propio CHECK constraint a partir del mismo código que hace el INSERT, así que ambos
+> lados coincidían por construcción. Fix: `values_callable=lambda obj: [e.value for e
+> in obj]` en cada `Enum(...)` de `models/job_posting.py` y `models/source.py`
+> (encapsulado en un helper `_enum()` en cada archivo). Verificado con
+> `bind_processor()` del dialecto de Postgres directamente (sin Postgres corriendo en
+> este sandbox) — falta que el usuario confirme que ya anda contra su Postgres real.
 
 ## Ya creado
 

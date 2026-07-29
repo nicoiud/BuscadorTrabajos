@@ -21,6 +21,14 @@ from app.db.base import Base
 EMBEDDING_DIM = 1024  # voyage-3 embedding size
 
 
+def _enum(python_enum_cls: type[enum.Enum], name: str) -> Enum:
+    # Sin values_callable, SQLAlchemy manda el .name del enum (ej. "PENDING") en vez
+    # del .value (ej. "pending") — pero el tipo enum de Postgres, creado por la
+    # migración, solo acepta los valores en minúscula. Sin esto, cualquier insert
+    # rompe con "invalid input value for enum ...".
+    return Enum(python_enum_cls, name=name, values_callable=lambda obj: [e.value for e in obj])
+
+
 class JobLanguage(str, enum.Enum):
     ES = "es"
     EN = "en"
@@ -71,18 +79,14 @@ class JobPosting(Base):
     posted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     scraped_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
-    language: Mapped[JobLanguage] = mapped_column(Enum(JobLanguage, name="job_language"))
-    region: Mapped[JobRegion] = mapped_column(Enum(JobRegion, name="job_region"))
+    language: Mapped[JobLanguage] = mapped_column(_enum(JobLanguage, "job_language"))
+    region: Mapped[JobRegion] = mapped_column(_enum(JobRegion, "job_region"))
 
     # AI-enriched fields — nullable until the enrichment pipeline (Phase 2) processes them.
     title_normalized: Mapped[str | None] = mapped_column(String(512), nullable=True)
     company_normalized: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    seniority: Mapped[Seniority | None] = mapped_column(
-        Enum(Seniority, name="seniority"), nullable=True
-    )
-    modality: Mapped[Modality | None] = mapped_column(
-        Enum(Modality, name="modality"), nullable=True
-    )
+    seniority: Mapped[Seniority | None] = mapped_column(_enum(Seniority, "seniority"), nullable=True)
+    modality: Mapped[Modality | None] = mapped_column(_enum(Modality, "modality"), nullable=True)
     salary_min: Mapped[int | None] = mapped_column(nullable=True)
     salary_max: Mapped[int | None] = mapped_column(nullable=True)
     currency: Mapped[str | None] = mapped_column(String(8), nullable=True)
@@ -94,7 +98,7 @@ class JobPosting(Base):
         Vector(EMBEDDING_DIM).with_variant(JSON(), "sqlite"), nullable=True
     )
     enrichment_status: Mapped[EnrichmentStatus] = mapped_column(
-        Enum(EnrichmentStatus, name="enrichment_status"),
+        _enum(EnrichmentStatus, "enrichment_status"),
         nullable=False,
         default=EnrichmentStatus.PENDING,
     )
