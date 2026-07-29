@@ -26,7 +26,15 @@ def _enum(python_enum_cls: type[enum.Enum], name: str) -> Enum:
     # del .value (ej. "pending") — pero el tipo enum de Postgres, creado por la
     # migración, solo acepta los valores en minúscula. Sin esto, cualquier insert
     # rompe con "invalid input value for enum ...".
-    return Enum(python_enum_cls, name=name, values_callable=lambda obj: [e.value for e in obj])
+    # create_constraint=True no cambia nada en Postgres (el enum nativo ya valida
+    # solo), pero en SQLite (usado en tests) hace que se genere un CHECK constraint
+    # real — sin esto, SQLite acepta cualquier string sin validar nada.
+    return Enum(
+        python_enum_cls,
+        name=name,
+        values_callable=lambda obj: [e.value for e in obj],
+        create_constraint=True,
+    )
 
 
 class JobLanguage(str, enum.Enum):

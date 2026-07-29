@@ -13,7 +13,13 @@ def _enum(python_enum_cls: type[enum.Enum], name: str) -> Enum:
     # Ver la misma nota en models/job_posting.py: sin values_callable, SQLAlchemy
     # manda el .name (mayúscula) en vez del .value (minúscula) del enum de Python, y
     # el tipo enum de Postgres creado por la migración solo acepta minúsculas.
-    return Enum(python_enum_cls, name=name, values_callable=lambda obj: [e.value for e in obj])
+    # create_constraint=True hace que SQLite (tests) también valide con un CHECK.
+    return Enum(
+        python_enum_cls,
+        name=name,
+        values_callable=lambda obj: [e.value for e in obj],
+        create_constraint=True,
+    )
 
 
 class SourceType(str, enum.Enum):

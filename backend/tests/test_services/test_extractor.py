@@ -72,3 +72,49 @@ async def test_extract_job_fields_raises_extraction_error_on_provider_rejection(
 
     with pytest.raises(ExtractionError):
         await extract_job_fields("Title", "Company", "Description")
+
+
+async def test_extract_job_fields_sanitizes_invalid_enum_values(patch_llm):
+    # Regresión: un modelo local (Ollama) no valida el schema tan estricto como Groq
+    # y puede mandar una descripción larga en vez de un valor exacto del enum — eso
+    # rompía el insert en Postgres más adelante. Ahora se descarta a None en vez de
+    # dejarlo pasar.
+    patch_llm(
+        tool_call_response(
+            {
+                "title_normalized": "Speculative CV",
+                "company_normalized": "ETL Systems",
+                "modality": "hybrid/onsite (implied by 'free on-site Employee Gym')",
+                "seniority": "somewhere between mid and senior",
+                "requirements": ["RF design"],
+                "summary": "ETL Systems is hiring.",
+            }
+        )
+    )
+
+    result = await extract_job_fields("Speculative CV", "ETL Systems", "Some description")
+
+    assert result.modality is None
+    assert result.seniority is None
+
+
+async def test_extract_job_fields_coerces_stringified_salary_and_truncates_currency(patch_llm):
+    patch_llm(
+        tool_call_response(
+            {
+                "title_normalized": "Backend Engineer",
+                "company_normalized": "Acme",
+                "requirements": ["Python"],
+                "summary": "Backend role.",
+                "salary_min": "50000",
+                "salary_max": "not specified",
+                "currency": "US Dollars per year",
+            }
+        )
+    )
+
+    result = await extract_job_fields("Backend Engineer", "Acme", "Some description")
+
+    assert result.salary_min == 50000
+    assert result.salary_max is None
+    assert result.currency == "US Dolla"  # truncado a 8 caracteres, columna VARCHAR(8)

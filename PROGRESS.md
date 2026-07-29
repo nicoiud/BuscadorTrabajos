@@ -59,9 +59,35 @@ original; convenciones de código en `CLAUDE.md`; quickstart en `README.md`.
 > a `EmbeddingError`; `pipeline.py` atrapa ese error específicamente y, si pasa, guarda
 > igual los campos extraídos (`enrichment_status=done`) con `embedding=None` en vez de
 > perder todo el lote — esos avisos no van a salir en búsqueda semántica hasta un
-> reintento futuro, pero no se pierde el trabajo. 3 tests nuevos. 34/34 tests. Falta
-> que el usuario confirme que `POST /jobs/enrich` ya no pierde el lote cuando falla el
-> embedding (con o sin `VOYAGE_API_KEY` configurada).
+> reintento futuro, pero no se pierde el trabajo. 3 tests nuevos. 34/34 tests.
+>
+> **Cuarto bug**: el usuario después probó con un modelo local vía Ollama
+> (`llama3.1`, corriendo en su RTX 3060) en vez de Groq/NVIDIA, para no depender de
+> cuota — buena idea, funciona porque el cliente es genérico. Pero un modelo más
+> chico no valida el schema tan estricto como Groq: mandó una descripción larga
+> (`"hybrid/onsite (implied by 'free on-site Employee Gym'...)"`) en vez de un valor
+> exacto para `modality`. Groq lo hubiera rechazado con 400 (y ya lo manejábamos
+> bien); Ollama no lo valida de su lado, así que pasó directo hasta Postgres y ahí
+> rompió con `invalid input value for enum modality`. Fix: `extractor.py` ahora
+> sanitiza `seniority`/`modality` (si no matchea exactamente un valor del enum, queda
+> `None` en vez de pasar cualquier cosa) y `salary_min`/`salary_max`/`currency`
+> (coerción de strings numéricos, descarte de no-numéricos, truncado de `currency` a
+> 8 caracteres — el límite de la columna). 3 tests nuevos, 36/36.
+>
+> Nota de proceso: también se intentó una capa extra de resiliencia en
+> `pipeline.py` (SAVEPOINT por aviso vía `db.begin_nested()`, para que un error de
+> constraint en un aviso puntual no arrastrara a los demás del mismo lote) — se
+> abandonó después de pelear con varios comportamientos internos de SQLAlchemy
+> async + aiosqlite (el auto-flush implícito de `begin_nested()`, después
+> `PendingRollbackError`/`MissingGreenlet` en intentos de recuperación). Se decidió
+> no perseguirlo más: la sanitización en `extractor.py` ya resuelve la causa real
+> del bug reportado, y agregar esa capa extra estaba metiendo más riesgo/fragilidad
+> del que sacaba. `pipeline.py` quedó en la versión simple (commit del lote
+> completo al final) — sigue siendo válido, solo que ya no tiene una segunda red de
+> seguridad a nivel fila para datos todavía-no-vistos que rompan una constraint.
+>
+> Falta que el usuario confirme que `POST /jobs/enrich?limit=100` corre completo
+> contra Ollama sin romperse en este dato puntual.
 
 ## Ya creado
 

@@ -70,8 +70,7 @@ async def enrich_pending_jobs(db: AsyncSession, limit: int | None = None) -> Enr
             # Si Voyage falla (key faltante, rate limit, lo que sea), no perdemos el
             # análisis de texto que sí funcionó — se guarda sin embedding. Sin
             # embedding esos avisos no van a aparecer en la búsqueda semántica hasta
-            # que se reintente, pero no se pierde el trabajo ya hecho ni se aborta el
-            # resto del lote.
+            # que se reintente, pero no se pierde el trabajo ya hecho.
             logger.warning("Embedding failed for the batch of %d jobs", len(extracted), exc_info=True)
             embeddings = [None] * len(extracted)
 

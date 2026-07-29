@@ -1,8 +1,12 @@
 from dataclasses import dataclass
 
+from app.models.job_posting import Modality, Seniority
 from app.services.enrichment.llm_client import LLMError, call_with_tool
 
 EXTRACTION_TOOL_NAME = "record_job_extraction"
+
+_VALID_SENIORITY = {s.value for s in Seniority}
+_VALID_MODALITY = {m.value for m in Modality}
 
 _EXTRACTION_SCHEMA = {
     "description": "Registra los campos normalizados de un aviso de empleo.",
@@ -82,6 +86,32 @@ def _build_user_message(title_raw: str, company_raw: str, description_raw: str) 
     )
 
 
+def _clean_enum(value: object, valid_values: set[str]) -> str | None:
+    # No todos los proveedores validan el schema del lado suyo (Groq sí, un modelo
+    # local vía Ollama no) — un modelo puede mandar una descripción larga en vez de
+    # uno de los valores exactos del enum. Si no matchea, lo tratamos como "no sabe".
+    return value if isinstance(value, str) and value in valid_values else None
+
+
+def _clean_int(value: object) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str) and value.strip().lstrip("-").isdigit():
+        return int(value.strip())
+    return None
+
+
+def _clean_currency(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    cleaned = value.strip()
+    # La columna es VARCHAR(8) — truncar en vez de dejar que un valor largo rompa el
+    # insert (defensa contra proveedores que no validan tipos/longitudes).
+    return cleaned[:8] or None
+
+
 async def extract_job_fields(
     title_raw: str, company_raw: str, description_raw: str
 ) -> JobExtraction:
@@ -101,11 +131,11 @@ async def extract_job_fields(
             company_normalized=data["company_normalized"],
             requirements=list(data["requirements"]),
             summary=data["summary"],
-            seniority=data.get("seniority"),
-            modality=data.get("modality"),
-            salary_min=data.get("salary_min"),
-            salary_max=data.get("salary_max"),
-            currency=data.get("currency"),
+            seniority=_clean_enum(data.get("seniority"), _VALID_SENIORITY),
+            modality=_clean_enum(data.get("modality"), _VALID_MODALITY),
+            salary_min=_clean_int(data.get("salary_min")),
+            salary_max=_clean_int(data.get("salary_max")),
+            currency=_clean_currency(data.get("currency")),
         )
     except KeyError as exc:
         raise ExtractionError(f"Respuesta del modelo incompleta, falta el campo {exc}") from exc
