@@ -475,3 +475,34 @@ repetidos/glitcheados en un `summary` generado ("soluúuúss" en vez de "soluç�
 parece ruido propio de un modelo local chico/cuantizado en generación libre (no
 tool-calling), no algo sanitizable de forma confiable en código; queda como
 limitación conocida, no como bug a arreglar.
+
+## Bug real en el frontend: la lista nunca mostraba más de ~20 puestos
+
+El usuario marcó todos los filtros de idioma (sin restricción de ubicación) después
+de un ingest que reportó "124 ofertas procesadas" y reportó que la lista de la
+bandeja nunca llegaba a mostrar los 124 — se quedaba corta siempre, sin ninguna
+forma de pedir más. Causa real: `GET /jobs` en el backend ya soportaba `offset`/
+`limit` desde el principio (con `limit` tope 100 por validación de FastAPI), pero
+el frontend nunca los usaba — `fetchJobs()` pedía siempre la página por default
+(las primeras 20) y no había ningún mecanismo de paginación en la UI. El número
+"124 procesadas" que se ve después del ingest es correcto (viene del resumen de
+ingestion, no de la lista), lo que estaba mal era la lista en sí.
+
+Fix, sin tocar el backend (ya soportaba paginación):
+- `api/jobs.ts`: `fetchJobs()` ahora acepta `offset`/`limit` y los manda como query
+  params a `GET /jobs`.
+- `hooks/useJobs.ts`: modo palabra clave reescrito con `useInfiniteQuery` (React
+  Query) — acumula páginas de a `PAGE_SIZE=20`, calcula `hasNextPage` comparando
+  cuánto se cargó contra el `total` que devuelve el backend. El modo "Búsqueda con
+  IA" (semántico) queda como estaba — trae un top-K rankeado de una sola vez, no
+  tiene sentido paginarlo. El hook ahora devuelve `{items, total, isLoading,
+  isError, hasNextPage, isFetchingNextPage, fetchNextPage}` en vez del objeto crudo
+  de React Query.
+- `pages/JobInbox.tsx`: consume el nuevo shape del hook, agrega un botón "Cargar
+  más (N de total)" al final de la lista, visible solo cuando `hasNextPage` es
+  true; debajo de la última página muestra "N de total ofertas" como confirmación
+  de que se ve todo.
+
+`npx tsc --noEmit` y `npm run build` sin errores. No hizo falta tocar el backend
+(la paginación ya existía en `GET /jobs`, simplemente no se usaba desde el
+frontend).

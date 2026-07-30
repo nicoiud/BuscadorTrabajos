@@ -16,13 +16,16 @@ export function JobInbox() {
   const [showPreferences, setShowPreferences] = useState(false);
 
   const { preferences, setPreferences } = usePreferences();
-  const { data, isLoading, isError } = useJobs(query, mode, preferences);
+  const { items, total, isLoading, isError, hasNextPage, isFetchingNextPage, fetchNextPage } = useJobs(
+    query,
+    mode,
+    preferences,
+  );
   const ingestion = useTriggerIngestion();
   const enrichment = useTriggerEnrichment();
   const { isSelected, toggle, count: selectedCount } = useSelectedJobs();
   const { profileText, setProfileText } = useProfile();
 
-  const items = data?.items ?? [];
   const openJob = items.find((job) => job.id === openJobId) ?? null;
 
   useEffect(() => {
@@ -161,7 +164,7 @@ export function JobInbox() {
             </p>
           )}
 
-          {data && items.length === 0 && !isLoading && (
+          {!isLoading && !isError && items.length === 0 && (
             <p className="p-4 text-sm text-slate-500">
               {mode === "semantic"
                 ? "Sin resultados. Probá primero \"Actualizar ofertas\" y \"Analizar con IA\"."
@@ -179,6 +182,26 @@ export function JobInbox() {
               onToggleSelected={() => toggle(job.id)}
             />
           ))}
+
+          {items.length > 0 && (
+            <div className="p-3 text-center">
+              {hasNextPage ? (
+                <button
+                  onClick={() => fetchNextPage()}
+                  disabled={isFetchingNextPage}
+                  className="rounded-md bg-slate-100 px-4 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-200 disabled:opacity-50"
+                >
+                  {isFetchingNextPage ? "Cargando..." : `Cargar más (${items.length} de ${total})`}
+                </button>
+              ) : (
+                total > 0 && (
+                  <p className="text-xs text-slate-400">
+                    {items.length} de {total} ofertas
+                  </p>
+                )
+              )}
+            </div>
+          )}
         </div>
 
         <div className="hidden min-w-0 flex-1 md:block">

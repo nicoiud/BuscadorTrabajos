@@ -56,7 +56,12 @@ export interface CoverLetterDraft {
 
 const API_BASE = "/api/v1";
 
-export async function fetchJobs(query: string, preferences: SearchPreferences): Promise<JobPostingList> {
+export async function fetchJobs(
+  query: string,
+  preferences: SearchPreferences,
+  offset = 0,
+  limit = 20,
+): Promise<JobPostingList> {
   const params = new URLSearchParams();
   if (query.trim()) params.set("q", query.trim());
   for (const lang of preferences.languages) params.append("languages", lang);
@@ -64,6 +69,8 @@ export async function fetchJobs(query: string, preferences: SearchPreferences): 
   if (preferences.restrictOnsiteLocation && onsiteLocation) {
     params.set("onsite_location", onsiteLocation);
   }
+  params.set("offset", String(offset));
+  params.set("limit", String(limit));
 
   const response = await fetch(`${API_BASE}/jobs?${params.toString()}`);
   if (!response.ok) {
