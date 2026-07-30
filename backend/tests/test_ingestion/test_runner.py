@@ -9,7 +9,6 @@ from app.services.ingestion.greenhouse import GREENHOUSE_API_URL
 from app.services.ingestion.lever import LEVER_API_URL
 from app.services.ingestion.remoteok import REMOTEOK_API_URL, RemoteOkAdapter
 from app.services.ingestion.runner import ingest_all_sources, ingest_source
-from app.services.ingestion.zonajobs import ZONAJOBS_SEARCH_URL
 
 _EMPTY_RSS_FEED = b"""<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0"><channel><title>Empty</title></channel></rss>
@@ -22,10 +21,6 @@ def _mock_empty_wwr_feed():
     respx.get(settings.weworkremotely_feed_urls).mock(
         return_value=Response(200, content=_EMPTY_RSS_FEED)
     )
-
-
-def _mock_empty_zonajobs():
-    respx.get(ZONAJOBS_SEARCH_URL).mock(return_value=Response(200, json={"content": []}))
 
 
 @respx.mock
@@ -99,7 +94,6 @@ async def test_ingest_all_sources_runs_remoteok_plus_configured_companies(
     monkeypatch.setattr(runner_module.settings, "lever_companies", "widgetco")
 
     _mock_empty_wwr_feed()
-    _mock_empty_zonajobs()
     respx.get(REMOTEOK_API_URL).mock(return_value=Response(200, json=remoteok_api_fixture))
     respx.get(GREENHOUSE_API_URL.format(board="acme")).mock(
         return_value=Response(
@@ -131,7 +125,7 @@ async def test_ingest_all_sources_runs_remoteok_plus_configured_companies(
     results = await ingest_all_sources(db_session)
 
     slugs = {r.source_slug for r in results}
-    assert slugs == {"remoteok", "weworkremotely", "zonajobs", "greenhouse-acme", "lever-widgetco"}
+    assert slugs == {"remoteok", "weworkremotely", "greenhouse-acme", "lever-widgetco"}
     assert all(r.error is None for r in results)
 
     rows = (await db_session.execute(select(JobPosting))).scalars().all()
@@ -148,7 +142,6 @@ async def test_ingest_all_sources_isolates_a_failing_source(
     monkeypatch.setattr(runner_module.settings, "lever_companies", "")
 
     _mock_empty_wwr_feed()
-    _mock_empty_zonajobs()
     respx.get(REMOTEOK_API_URL).mock(return_value=Response(200, json=remoteok_api_fixture))
     respx.get(GREENHOUSE_API_URL.format(board="broken-board")).mock(
         side_effect=httpx.ConnectError("simulated network failure")

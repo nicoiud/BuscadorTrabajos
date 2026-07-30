@@ -397,8 +397,28 @@ en bumeran.com.ar).
 Tests nuevos: `test_zonajobs.py` (combinación listado+detalle, fallback cuando el
 detalle falla, default de empresa confidencial). 59/59 tests backend.
 
-**Pendiente**: verificar contra el sitio real (no se pudo probar desde este sandbox,
-igual que Greenhouse/Lever) — correr `POST /jobs/ingest` y confirmar que los avisos
-de ZonaJobs aparecen bien y que el link "Ver aviso original" abre la página correcta.
-Todavía faltan Bumeran (confirmar API compartida), Computrabajo, WeRemoto y Workana —
-mismo proceso de investigación (robots.txt + Network tab) que se usó acá.
+## Corrección: ZonaJobs también está bloqueado — se saca de la corrida automática
+
+El usuario probó `POST /jobs/ingest` contra el sitio real y la API de ZonaJobs
+devolvió **403 Forbidden** — a diferencia de lo que asumí, el hecho de que
+`robots.txt` no la bloqueara no significaba que el pedido fuera a pasar: el servidor
+mismo rechaza pedidos que no vienen de una sesión de browser real. Mismo tipo de
+señal que ya habíamos visto con Bumeran (ahí era Cloudflare con captcha; acá es un
+403 liso), solo que esta vez apareció después de commitear el adapter en vez de
+antes — debí haber probado esto (o al menos advertido el riesgo) antes de darlo por
+andando.
+
+Corrección aplicada: `ZonaJobsAdapter` se sacó de `_configured_adapters()` en
+`runner.py` (con un comentario explicando por qué) — el código y los tests quedan
+porque siguen siendo correctos como implementación, simplemente no se ejecutan
+solos. Agregar headers (`Referer`/`Origin`) para que el pedido parezca venir del
+propio frontend del sitio cruzaría la regla de `CLAUDE.md` de nunca simular un
+browser para evadir bloqueos, así que no se intentó. Se removieron los mocks de
+ZonaJobs de `test_runner.py` (ya no corre por defecto ahí). 59/59 tests backend.
+
+**Estado real de fuentes por scraping/API-no-pública**: ZonaJobs y Bumeran quedan en
+la misma categoría que LinkedIn — bloqueados, no implementados, por la misma razón de
+fondo (el sitio activamente no quiere tráfico automatizado ahí). Quedan pendientes
+con el mismo proceso de investigación: Computrabajo, WeRemoto y Workana — con la
+advertencia de que si el resultado es el mismo (403/Cloudflare), tampoco se van a
+implementar.

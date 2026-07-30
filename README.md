@@ -31,18 +31,21 @@ falta.
   públicas de job board.
 - **We Work Remotely** — feeds RSS por categoría (`WEWORKREMOTELY_FEED_URLS` en
   `.env`, separados por coma). Pensado para agregadores, no scraping.
-- **ZonaJobs** (Argentina) — no tiene API pública documentada, pero su propio
-  frontend (una SPA) consume una API JSON interna para listar y mostrar avisos,
-  descubierta inspeccionando el tráfico de red del sitio (no scraping de HTML —
-  `robots.txt` no la bloquea). Trae los avisos más relevantes por corrida.
 - **LinkedIn — explícitamente fuera de alcance.** El ToS de LinkedIn prohíbe el
   scraping y hay antecedentes legales (hiQ Labs v. LinkedIn). No se implementa un
   scraper. Ver `CLAUDE.md`.
-- **Bumeran / Computrabajo / WeRemoto / Workana** — pendiente. Bumeran comparte
-  plataforma con ZonaJobs (mismo `SITE_ID` en el bundle de JS) así que probablemente
-  reutilice casi el mismo adapter, falta confirmar. Los otros tres necesitan la misma
-  investigación que se hizo para ZonaJobs (robots.txt + inspección de Network en
-  DevTools para encontrar su API interna, o HTML real si no la tienen).
+- **ZonaJobs / Bumeran — bloqueados, no se usan.** Se encontró la API JSON interna
+  que usa el propio frontend de ZonaJobs (`services/ingestion/zonajobs.py`, código
+  presente pero no conectado a `POST /jobs/ingest`), pero devuelve **403 Forbidden**
+  a pedidos que no vienen de un browser real — señal de bloqueo activo, no solo
+  ausencia de API pública. Agregar headers para simular ser el frontend del sitio
+  violaría la regla de no evadir bloqueos (`CLAUDE.md`). Bumeran (misma plataforma,
+  confirmado por compartir `SITE_ID` en el JS) está directamente detrás de
+  Cloudflare con el mismo resultado.
+- **Computrabajo / WeRemoto / Workana** — pendiente, misma investigación
+  (robots.txt + inspección de Network en DevTools) que se hizo para ZonaJobs, con
+  la salvedad de que si el resultado es el mismo (403/Cloudflare a pedidos
+  no-browser) tampoco se van a implementar.
 
 ## Arquitectura
 
