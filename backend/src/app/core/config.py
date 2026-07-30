@@ -41,5 +41,14 @@ class Settings(BaseSettings):
     greenhouse_boards: str = ""
     lever_companies: str = ""
 
+    # Feeds RSS de We Work Remotely a agregar, separados por coma. Default: solo la
+    # categoría de programación (la más relevante para este proyecto) — no se pudo
+    # verificar el resto de las URLs de categoría contra el sitio real (sin salida de
+    # red en el entorno donde se escribió este adapter), así que se dejan afuera del
+    # default en vez de arriesgar URLs rotas. Se pueden agregar más sin tocar código.
+    weworkremotely_feed_urls: str = (
+        "https://weworkremotely.com/categories/remote-programming-jobs.rss"
+    )
+
 
 settings = Settings()

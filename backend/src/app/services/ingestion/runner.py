@@ -12,6 +12,7 @@ from app.services.ingestion.base import SourceAdapter
 from app.services.ingestion.greenhouse import GreenhouseAdapter
 from app.services.ingestion.lever import LeverAdapter
 from app.services.ingestion.remoteok import RemoteOkAdapter
+from app.services.ingestion.weworkremotely import WeWorkRemotelyAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -94,7 +95,7 @@ async def ingest_source(db: AsyncSession, adapter: SourceAdapter) -> IngestResul
 
 
 def _configured_adapters() -> list[SourceAdapter]:
-    adapters: list[SourceAdapter] = [RemoteOkAdapter()]
+    adapters: list[SourceAdapter] = [RemoteOkAdapter(), WeWorkRemotelyAdapter()]
 
     for board in _split_csv(settings.greenhouse_boards):
         adapters.append(GreenhouseAdapter(board=board))

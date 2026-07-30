@@ -17,6 +17,7 @@ dependencies = [
   "openai>=1.50",
   "langdetect>=1.0.9",
   "ftfy>=6.3",
+  "feedparser>=6.0",
 ]
 
 [project.optional-dependencies]

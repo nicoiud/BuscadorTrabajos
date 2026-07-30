@@ -29,13 +29,15 @@ falta.
   `LEVER_COMPANIES` en `.env`, una empresa por slug, separadas por coma). Cubre
   muchísimas empresas que usan estas plataformas como ATS, sin scraping — son APIs
   públicas de job board.
+- **We Work Remotely** — feeds RSS por categoría (`WEWORKREMOTELY_FEED_URLS` en
+  `.env`, separados por coma). Pensado para agregadores, no scraping.
 - **LinkedIn — explícitamente fuera de alcance.** El ToS de LinkedIn prohíbe el
   scraping y hay antecedentes legales (hiQ Labs v. LinkedIn). No se implementa un
   scraper. Ver `CLAUDE.md`.
-- **ZonaJobs / Bumeran / Computrabajo** — pendiente. Requiere scraping de HTML
-  (no tienen API pública), así que antes de escribir el parser hay que revisar
-  `robots.txt` de cada sitio y tener una muestra real del HTML para no adivinar la
-  estructura.
+- **ZonaJobs / Bumeran / Computrabajo / WeRemoto / Workana** — pendiente. Requieren
+  scraping de HTML (no tienen API pública conocida), así que antes de escribir el
+  parser hay que revisar `robots.txt` de cada sitio y tener una muestra real del HTML
+  para no adivinar la estructura.
 
 ## Arquitectura
 

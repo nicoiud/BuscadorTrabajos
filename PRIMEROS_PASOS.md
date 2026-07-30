@@ -314,6 +314,43 @@ cual, pero hay que confirmarlo: configurar `GREENHOUSE_BOARDS`/`LEVER_COMPANIES`
 esperado (nombres de campos, formato de fecha, etc.) avisar para ajustar el parser —
 mismo proceso iterativo que se usó para ir puliendo el adapter de RemoteOK.
 
+## We Work Remotely + pedido consolidado de fuentes por scraping
+
+El usuario pidió sumar "muchas" fuentes para que el buscador nuclee de varios sitios:
+ZonaJobs, Computrabajo, Bumeran ("boomerang"), WeRemoto y Workana.
+
+- **We Work Remotely agregado**: feeds RSS por categoría (pensados para consumo
+  automatizado, no scraping) — `WeWorkRemotelyAdapter`, configurable por
+  `WEWORKREMOTELY_FEED_URLS` (una o más URLs separadas por coma). Parsea con
+  `feedparser`; el título del feed viene como `"Empresa: Puesto"`, se separa por el
+  primer `": "`. Cada URL de categoría se fetchea por separado y una que falle
+  (rota, 500, etc.) no aborta las demás — mismo patrón de aislamiento que
+  `ingest_all_sources`. Default: solo la categoría de programación, porque no se
+  pudo verificar el resto de las URLs de categoría contra el sitio real (mismo
+  problema de red del sandbox). 56/56 tests backend.
+- **ZonaJobs, Computrabajo, Bumeran, WeRemoto, Workana: ninguno implementado
+  todavía**. Los cinco necesitan scraping de HTML (no se conoce una API pública para
+  ninguno) y este sandbox no tiene salida de red — no se puede chequear `robots.txt`,
+  ver si hay una API JSON interna, ni la estructura real de una página. Escribir un
+  parser HTML a ciegas es el tipo de cosa que se rompe apenas se prueba contra datos
+  reales (o peor, "funciona" pero devuelve basura silenciosamente).
+
+**Pendiente del usuario, para poder construir estos cinco bien a la primera** (por
+cada sitio: zonajobs.com.ar, computrabajo.com.ar, bumeran.com.ar, weremoto.com,
+workana.com):
+1. `robots.txt` del sitio (`curl https://www.SITIO/robots.txt` desde su cmd, que sí
+   tiene salida de red).
+2. Chequear si hay una API JSON interna antes de asumir que hay que scrapear HTML:
+   abrir la página de resultados en Chrome, F12 → pestaña Network → filtro
+   Fetch/XHR → recargar → ver si algún request devuelve JSON con los avisos. Si lo
+   hay, es mucho más robusto consumir eso que parsear HTML — pasar la URL de ese
+   request (botón derecho → Copy → Copy as cURL).
+3. Si no hay API interna: una muestra de HTML real de una página de resultados y una
+   de detalle de aviso (Ctrl+U para ver el código fuente, o guardar la página).
+
+Con eso se arma cada adapter respetando `robots.txt`/rate-limit como ya exige
+`CLAUDE.md` para scrapers nuevos, en vez de adivinar.
+
 **Pendiente de decisión del usuario**: la idea de "que los avisos sean para tu perfil"
 (matching automático contra un CV/perfil guardado, con score) es la Fase 3 del plan
 original — todavía no existe (`profiles`/`match_scores` no están implementados; el

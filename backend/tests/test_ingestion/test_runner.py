@@ -10,6 +10,18 @@ from app.services.ingestion.lever import LEVER_API_URL
 from app.services.ingestion.remoteok import REMOTEOK_API_URL, RemoteOkAdapter
 from app.services.ingestion.runner import ingest_all_sources, ingest_source
 
+_EMPTY_RSS_FEED = b"""<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"><channel><title>Empty</title></channel></rss>
+"""
+
+
+def _mock_empty_wwr_feed():
+    from app.core.config import settings
+
+    respx.get(settings.weworkremotely_feed_urls).mock(
+        return_value=Response(200, content=_EMPTY_RSS_FEED)
+    )
+
 
 @respx.mock
 async def test_ingest_source_creates_jobs_on_first_run(db_session, remoteok_api_fixture):
@@ -81,6 +93,7 @@ async def test_ingest_all_sources_runs_remoteok_plus_configured_companies(
     monkeypatch.setattr(runner_module.settings, "greenhouse_boards", "acme")
     monkeypatch.setattr(runner_module.settings, "lever_companies", "widgetco")
 
+    _mock_empty_wwr_feed()
     respx.get(REMOTEOK_API_URL).mock(return_value=Response(200, json=remoteok_api_fixture))
     respx.get(GREENHOUSE_API_URL.format(board="acme")).mock(
         return_value=Response(
@@ -112,7 +125,7 @@ async def test_ingest_all_sources_runs_remoteok_plus_configured_companies(
     results = await ingest_all_sources(db_session)
 
     slugs = {r.source_slug for r in results}
-    assert slugs == {"remoteok", "greenhouse-acme", "lever-widgetco"}
+    assert slugs == {"remoteok", "weworkremotely", "greenhouse-acme", "lever-widgetco"}
     assert all(r.error is None for r in results)
 
     rows = (await db_session.execute(select(JobPosting))).scalars().all()
@@ -128,6 +141,7 @@ async def test_ingest_all_sources_isolates_a_failing_source(
     monkeypatch.setattr(runner_module.settings, "greenhouse_boards", "broken-board")
     monkeypatch.setattr(runner_module.settings, "lever_companies", "")
 
+    _mock_empty_wwr_feed()
     respx.get(REMOTEOK_API_URL).mock(return_value=Response(200, json=remoteok_api_fixture))
     respx.get(GREENHOUSE_API_URL.format(board="broken-board")).mock(
         side_effect=httpx.ConnectError("simulated network failure")
