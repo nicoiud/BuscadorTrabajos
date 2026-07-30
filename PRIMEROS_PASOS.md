@@ -362,3 +362,43 @@ búsqueda va a rankear los avisos por similitud semántica al perfil, que es
 scoring dedicada. Falta confirmar con el usuario si igual quiere la Fase 3 completa
 (perfil guardado + score visible por aviso, sin tener que re-pegar el texto cada vez)
 más adelante.
+
+## ZonaJobs: API interna encontrada vía DevTools, no HTML scraping
+
+El usuario hizo el trabajo de campo que se le había pedido: `robots.txt` (no bloquea
+nada relevante, y lista `sitemap_avisos_zj.xml`) y una captura del Network tab del
+navegador en una página de aviso y en una de resultados. Resultado: **ZonaJobs es una
+SPA** — el HTML servido está vacío (`<div id="root">` con un spinner, contenido real
+pintado por JS), así que "ver código fuente" nunca iba a servir para esto. Pero el
+propio frontend de ZonaJobs pega a una API JSON interna, y esa sí sirve datos
+completos:
+
+- **Listado**: `GET /api/avisos/searchV2?pageSize=20&page=0&sort=RELEVANTES` — trae
+  varios avisos por pedido, con `detalle` (descripción) ya en texto plano, sin HTML.
+- **Detalle**: `GET /api/candidates/fichaAvisoNormalizada/{id}` — un aviso completo;
+  se usa solo para conseguir `seoFriendlyUrl` (la URL linda), que el listado no trae.
+
+`ZonaJobsAdapter` (`services/ingestion/zonajobs.py`) combina los dos: un pedido al
+listado, y un pedido de detalle por cada aviso (con `await asyncio.sleep
+(scraper_default_delay_seconds)` entre cada uno para no hostigar el servidor). Si el
+detalle de un aviso puntual falla, no se pierde el aviso — se arma con los campos que
+ya trajo el listado y una URL de fallback (`/empleos.html?aviso={id}`) en vez de la
+linda. `language`/`region` van hardcodeados (`es`/`latam`) porque, a diferencia de
+RemoteOK, ZonaJobs es un sitio de un solo país e idioma — no hace falta
+`detect_job_language` acá. `source_type = SCRAPE` (no `API`) porque es una API interna
+no documentada/no pública, a diferencia de Greenhouse/Lever.
+
+Dato para lo que sigue: el JS del sitio tiene una variable `window.SITE_ID` que
+distingue `"ZJAR"` (ZonaJobs) de `"BMVE"` (Bumeran) — mismo bundle para los dos, así
+que **Bumeran probablemente use la misma API**, solo cambiando el dominio. Falta
+confirmarlo antes de asumirlo (pedirle al usuario un curl rápido a la URL equivalente
+en bumeran.com.ar).
+
+Tests nuevos: `test_zonajobs.py` (combinación listado+detalle, fallback cuando el
+detalle falla, default de empresa confidencial). 59/59 tests backend.
+
+**Pendiente**: verificar contra el sitio real (no se pudo probar desde este sandbox,
+igual que Greenhouse/Lever) — correr `POST /jobs/ingest` y confirmar que los avisos
+de ZonaJobs aparecen bien y que el link "Ver aviso original" abre la página correcta.
+Todavía faltan Bumeran (confirmar API compartida), Computrabajo, WeRemoto y Workana —
+mismo proceso de investigación (robots.txt + Network tab) que se usó acá.

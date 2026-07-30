@@ -31,13 +31,18 @@ falta.
   públicas de job board.
 - **We Work Remotely** — feeds RSS por categoría (`WEWORKREMOTELY_FEED_URLS` en
   `.env`, separados por coma). Pensado para agregadores, no scraping.
+- **ZonaJobs** (Argentina) — no tiene API pública documentada, pero su propio
+  frontend (una SPA) consume una API JSON interna para listar y mostrar avisos,
+  descubierta inspeccionando el tráfico de red del sitio (no scraping de HTML —
+  `robots.txt` no la bloquea). Trae los avisos más relevantes por corrida.
 - **LinkedIn — explícitamente fuera de alcance.** El ToS de LinkedIn prohíbe el
   scraping y hay antecedentes legales (hiQ Labs v. LinkedIn). No se implementa un
   scraper. Ver `CLAUDE.md`.
-- **ZonaJobs / Bumeran / Computrabajo / WeRemoto / Workana** — pendiente. Requieren
-  scraping de HTML (no tienen API pública conocida), así que antes de escribir el
-  parser hay que revisar `robots.txt` de cada sitio y tener una muestra real del HTML
-  para no adivinar la estructura.
+- **Bumeran / Computrabajo / WeRemoto / Workana** — pendiente. Bumeran comparte
+  plataforma con ZonaJobs (mismo `SITE_ID` en el bundle de JS) así que probablemente
+  reutilice casi el mismo adapter, falta confirmar. Los otros tres necesitan la misma
+  investigación que se hizo para ZonaJobs (robots.txt + inspección de Network en
+  DevTools para encontrar su API interna, o HTML real si no la tienen).
 
 ## Arquitectura
 
