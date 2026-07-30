@@ -422,3 +422,56 @@ fondo (el sitio activamente no quiere tráfico automatizado ahí). Quedan pendie
 con el mismo proceso de investigación: Computrabajo, WeRemoto y Workana — con la
 advertencia de que si el resultado es el mismo (403/Cloudflare), tampoco se van a
 implementar.
+
+## Bug real en extractor.py: el modelo local devolvía basura estructural
+
+El usuario probó "Búsqueda con IA" con "analista funcional" y con "business analyst"
+y ambas devolvieron resultados básicamente iguales e irrelevantes (avisos de prueba
+tipo "This is a test job", formularios, etc.) — no era un problema del modelo de
+embeddings ni del idioma. Investigando los datos reales devueltos por `curl`, aparecieron
+dos bugs de verdad en `extractor.py`:
+
+1. **Eco del schema como valor**: para el aviso "ACT Application Form", el modelo
+   local (Ollama, más débil que Groq) devolvió como `title_normalized` el propio
+   JSON del schema de la tool (`{"type":"string","description":"...","value":"ACT
+   Application Form"}`) en vez del texto esperado — y el código lo guardaba tal
+   cual, literal, en la columna.
+2. **`requirements` como string en vez de array**: para otro aviso, el modelo mandó
+   la lista de requisitos como un string con forma de array (`'["loving the
+   company\'s products"...]'`) en vez de un array real. `list(esa_string)` (código
+   viejo) la explotó en un array de un carácter por elemento (`["[", "\"", "l",
+   "o", "v", ...]`).
+
+Ambos contaminan `_embedding_text()` en `pipeline.py` (arma el texto para el
+embedding a partir de `title_normalized`/`summary`/`requirements`), así que el
+embedding resultante para esos avisos es básicamente ruido — de ahí que la búsqueda
+semántica rankeara cosas sin relación ninguna arriba de todo.
+
+Fix en `extractor.py`: `_clean_text()` (nuevo) detecta el patrón de eco-de-schema e
+intenta rescatar el `"value"` de adentro antes de tirar el campo; si no se puede
+rescatar, cae al título/empresa crudos (`title_raw`/`company_raw`, que ya tenemos)
+en vez de perder el aviso entero. `_clean_requirements()` (nuevo) solo trata un
+string como lista si de verdad parsea como JSON-array; si no, devuelve `[]` en vez
+de explotarlo en caracteres. De paso, `title_normalized`/`company_normalized`/
+`summary` con campo faltante o no reconstruible ya no tiran `ExtractionError` (que
+perdía el aviso entero) — usan el fallback crudo, mismo criterio que ya se aplicaba
+a seniority/modalidad.
+
+Script `scripts/reset_enrichment.py` para los avisos ya procesados con el bug activo
+(no se corrigen solos porque `POST /jobs/enrich` solo toca `pending`) — por default
+resetea todos los `done`/`failed` a `pending`; `--only-suspicious` para resetear
+solo los que tienen la firma del bug.
+
+Tests nuevos en `test_extractor.py` (eco de schema, requirements como string válido
+e inválido, fallback en campos faltantes — se actualizó el test viejo que esperaba
+`ExtractionError` ahí, ahora es el comportamiento esperado). 62/62 tests backend.
+
+**Otro hallazgo del mismo debugging, no bloqueante**: solo 31 de 151 avisos tenían
+`enrichment_status=done` — la búsqueda semántica solo busca entre esos (requiere
+embedding no nulo). "Analizar con IA" procesa de a `ENRICHMENT_BATCH_SIZE` (20) por
+click; para poblar bien la búsqueda semántica hace falta correrlo varias veces o
+pasar `?limit=` más alto por `curl`. También se vio un caso de texto con caracteres
+repetidos/glitcheados en un `summary` generado ("soluúuúss" en vez de "soluções") —
+parece ruido propio de un modelo local chico/cuantizado en generación libre (no
+tool-calling), no algo sanitizable de forma confiable en código; queda como
+limitación conocida, no como bug a arreglar.

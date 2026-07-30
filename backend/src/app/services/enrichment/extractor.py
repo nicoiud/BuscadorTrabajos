@@ -1,3 +1,4 @@
+import json
 from dataclasses import dataclass
 
 from app.models.job_posting import Modality, Seniority
@@ -112,6 +113,61 @@ def _clean_currency(value: object) -> str | None:
     return cleaned[:8] or None
 
 
+def _clean_text(value: object, max_length: int) -> str | None:
+    if not isinstance(value, str):
+        return None
+    cleaned = value.strip()
+    if not cleaned:
+        return None
+    # Modelos débiles (sobre todo locales vía Ollama) a veces devuelven, como valor
+    # de un campo de texto, el propio JSON del schema de la tool en vez del texto
+    # esperado — ej. title_normalized = '{"type":"string","description":"...",
+    # "value":"ACT Application Form"}'. Intentamos rescatar el "value" de adentro
+    # antes de tirar el campo — guardar ese JSON tal cual contaminaría el resumen
+    # usado para generar el embedding y arruinaría la búsqueda semántica.
+    if cleaned.startswith("{") and '"value"' in cleaned:
+        try:
+            parsed = json.loads(cleaned)
+        except json.JSONDecodeError:
+            return None
+        cleaned = parsed.get("value", "").strip() if isinstance(parsed, dict) else ""
+    if not cleaned or cleaned.startswith("{"):
+        return None
+    return cleaned[:max_length]
+
+
+def _clean_requirements(value: object) -> list[str]:
+    if isinstance(value, list):
+        items: list[object] = value
+    elif isinstance(value, str):
+        # Regresión: si el modelo devuelve la lista como un string en vez de un
+        # array real (ej. '["Python", "SQL"]' como texto), `list(esa_string)` la
+        # explota en caracteres sueltos ("[", "\"", "P", "y", "t", "h", "o", "n"...).
+        # Solo lo tratamos como lista si de verdad parsea como una.
+        cleaned = value.strip()
+        if not cleaned.startswith("["):
+            return []
+        try:
+            parsed = json.loads(cleaned)
+        except json.JSONDecodeError:
+            return []
+        items = parsed if isinstance(parsed, list) else []
+    else:
+        return []
+
+    requirements: list[str] = []
+    for item in items:
+        if isinstance(item, str):
+            text = item.strip()
+        elif isinstance(item, (int, float)):
+            text = str(item)
+        else:
+            continue
+        if text:
+            requirements.append(text[:200])
+    return requirements[:15]
+
+
 async def extract_job_fields(
     title_raw: str, company_raw: str, description_raw: str
 ) -> JobExtraction:
@@ -125,17 +181,17 @@ async def extract_job_fields(
     except LLMError as exc:
         raise ExtractionError(str(exc)) from exc
 
-    try:
-        return JobExtraction(
-            title_normalized=data["title_normalized"],
-            company_normalized=data["company_normalized"],
-            requirements=list(data["requirements"]),
-            summary=data["summary"],
-            seniority=_clean_enum(data.get("seniority"), _VALID_SENIORITY),
-            modality=_clean_enum(data.get("modality"), _VALID_MODALITY),
-            salary_min=_clean_int(data.get("salary_min")),
-            salary_max=_clean_int(data.get("salary_max")),
-            currency=_clean_currency(data.get("currency")),
-        )
-    except KeyError as exc:
-        raise ExtractionError(f"Respuesta del modelo incompleta, falta el campo {exc}") from exc
+    # title_normalized/company_normalized/summary caen al valor crudo si el modelo
+    # no mandó algo utilizable — un campo puntual mal formado no debería perder todo
+    # el aviso (mismo criterio que ya se aplica a seniority/modalidad).
+    return JobExtraction(
+        title_normalized=_clean_text(data.get("title_normalized"), 512) or title_raw.strip(),
+        company_normalized=_clean_text(data.get("company_normalized"), 255) or company_raw.strip(),
+        requirements=_clean_requirements(data.get("requirements")),
+        summary=_clean_text(data.get("summary"), 2000) or "",
+        seniority=_clean_enum(data.get("seniority"), _VALID_SENIORITY),
+        modality=_clean_enum(data.get("modality"), _VALID_MODALITY),
+        salary_min=_clean_int(data.get("salary_min")),
+        salary_max=_clean_int(data.get("salary_max")),
+        currency=_clean_currency(data.get("currency")),
+    )

@@ -37,11 +37,19 @@ async def test_extract_job_fields_raises_when_no_tool_call(patch_llm):
         await extract_job_fields("Title", "Company", "Description")
 
 
-async def test_extract_job_fields_raises_on_missing_field(patch_llm):
-    patch_llm(tool_call_response({"title_normalized": "X"}))  # missing required fields
+async def test_extract_job_fields_falls_back_to_raw_values_on_missing_fields(patch_llm):
+    # Regresión: antes, si al modelo le faltaba cualquiera de los campos
+    # "requeridos" del schema, se perdía el aviso entero con ExtractionError — un
+    # solo campo mal devuelto no debería tirar abajo el aviso cuando ya tenemos el
+    # título/empresa crudos para usar como fallback.
+    patch_llm(tool_call_response({"title_normalized": "X"}))
 
-    with pytest.raises(ExtractionError):
-        await extract_job_fields("Title", "Company", "Description")
+    result = await extract_job_fields("Title", "Company", "Description")
+
+    assert result.title_normalized == "X"
+    assert result.company_normalized == "Company"  # fallback al crudo
+    assert result.requirements == []
+    assert result.summary == ""
 
 
 async def test_extract_job_fields_allows_missing_seniority_and_modality(patch_llm):
@@ -96,6 +104,68 @@ async def test_extract_job_fields_sanitizes_invalid_enum_values(patch_llm):
 
     assert result.modality is None
     assert result.seniority is None
+
+
+async def test_extract_job_fields_recovers_from_schema_echo_in_text_fields(patch_llm):
+    # Bug real encontrado en producción con un modelo local (Ollama) débil: en vez
+    # de devolver el texto esperado, el modelo devolvió el propio JSON del schema
+    # de la tool como si fuera el valor del campo. Guardarlo tal cual contamina el
+    # texto que se usa para generar el embedding (búsqueda semántica) con basura.
+    patch_llm(
+        tool_call_response(
+            {
+                "title_normalized": (
+                    '{"type":"string","description":"Título del puesto, limpio y '
+                    'sin ruido.", "value":"ACT Application Form"}'
+                ),
+                "company_normalized": '{"type":"string","description":"Nombre de la empresa.","value":"Yo-Bar"}',
+                "requirements": ["Loving the company's products"],
+                "summary": "Some summary.",
+            }
+        )
+    )
+
+    result = await extract_job_fields("ACT Application Form", "Yo-Bar", "Some description")
+
+    assert result.title_normalized == "ACT Application Form"
+    assert result.company_normalized == "Yo-Bar"
+
+
+async def test_extract_job_fields_recovers_requirements_sent_as_stringified_array(patch_llm):
+    # Bug real: el modelo mandó requirements como un string con forma de array en
+    # vez de un array real. `list(esa_string)` la explotaba en caracteres sueltos
+    # ("[", "\"", "l", "o", "v", "i", "n", "g", ...) en vez de items reales.
+    patch_llm(
+        tool_call_response(
+            {
+                "title_normalized": "Web Publisher",
+                "company_normalized": "eStoreLabs",
+                "requirements": '["Availability 2 years", "English C1 level"]',
+                "summary": "Some summary.",
+            }
+        )
+    )
+
+    result = await extract_job_fields("Web Publisher", "eStoreLabs", "Some description")
+
+    assert result.requirements == ["Availability 2 years", "English C1 level"]
+
+
+async def test_extract_job_fields_discards_unparseable_requirements_string(patch_llm):
+    patch_llm(
+        tool_call_response(
+            {
+                "title_normalized": "Web Publisher",
+                "company_normalized": "eStoreLabs",
+                "requirements": "not a list at all",
+                "summary": "Some summary.",
+            }
+        )
+    )
+
+    result = await extract_job_fields("Web Publisher", "eStoreLabs", "Some description")
+
+    assert result.requirements == []
 
 
 async def test_extract_job_fields_coerces_stringified_salary_and_truncates_currency(patch_llm):
