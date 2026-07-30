@@ -33,6 +33,14 @@ export interface IngestResult {
   fetched: number;
   created: number;
   updated: number;
+  error: string | null;
+}
+
+export interface IngestSummary {
+  results: IngestResult[];
+  total_fetched: number;
+  total_created: number;
+  total_updated: number;
 }
 
 export interface EnrichResult {
@@ -86,8 +94,8 @@ export async function semanticSearchJobs(
   return response.json();
 }
 
-export async function triggerRemoteOkIngestion(): Promise<IngestResult> {
-  const response = await fetch(`${API_BASE}/jobs/ingest/remoteok`, { method: "POST" });
+export async function triggerIngestion(): Promise<IngestSummary> {
+  const response = await fetch(`${API_BASE}/jobs/ingest`, { method: "POST" });
   if (!response.ok) {
     throw new Error(`Error al disparar la ingestion: ${response.status}`);
   }

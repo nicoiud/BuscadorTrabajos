@@ -5,6 +5,7 @@ import httpx
 
 from app.core.config import settings
 from app.models.job_posting import JobRegion
+from app.models.source import SourceLanguage, SourceRegion, SourceType
 from app.services.ingestion.base import RawJobPosting, SourceAdapter
 from app.services.ingestion.language_detection import detect_job_language
 from app.services.ingestion.text_cleaning import clean_raw_text, clean_raw_text_inline
@@ -16,6 +17,9 @@ class RemoteOkAdapter(SourceAdapter):
     """RemoteOK public JSON API — no API key required."""
 
     slug = "remoteok"
+    source_type = SourceType.API
+    source_region = SourceRegion.GLOBAL
+    source_language = SourceLanguage.EN
 
     async def fetch(self) -> list[RawJobPosting]:
         headers = {"User-Agent": settings.scraper_user_agent, "Accept": "application/json"}

@@ -262,3 +262,66 @@ se evita una migración de la columna `vector` en Postgres.
 descarga el modelo) y confirmar que `POST /search` funciona de punta a punta con avisos
 reales — no se pudo probar contra un Ollama real en este sandbox (no hay Ollama
 instalado acá), solo verificado con mocks + que el cliente apunta al endpoint correcto.
+
+## Más fuentes: Greenhouse + Lever genéricos (LinkedIn y ZonaJobs, no todavía)
+
+El usuario pidió sumar muchas fuentes más — LinkedIn, ZonaJobs, y "sitios web de
+empresas" en general — porque notó que RemoteOK es un feed fijo de ~100 avisos
+recientes (sin búsqueda), así que el archivo no crecía en base a lo que buscaba.
+
+- **LinkedIn: reconfirmado fuera de alcance** (regla explícita de `CLAUDE.md` — ToS +
+  antecedente legal hiQ Labs v. LinkedIn). Se le explicó el motivo al usuario antes de
+  tocar código, no se implementó.
+- **"Sitios web de empresas" → Greenhouse + Lever genéricos**: en vez de un adapter
+  por empresa (inviable, cada sitio tiene su propia estructura), se armaron DOS
+  adapters genéricos parametrizados por empresa — `GreenhouseAdapter(board=...)` y
+  `LeverAdapter(company=...)` — que cubren cualquier empresa que use esas plataformas
+  como ATS (son muchísimas, de startups a empresas grandes). Configurables por
+  `GREENHOUSE_BOARDS`/`LEVER_COMPANIES` en `.env` (slugs separados por coma), sin
+  tocar código para agregar una empresa nueva. Son APIs públicas de job board, no
+  scraping — sin problema de ToS.
+- **ZonaJobs/Bumeran/Computrabajo: todavía no implementado**. Requieren scraping de
+  HTML (no exponen API pública) y no hay red de salida en este sandbox para
+  verificar `robots.txt` ni la estructura real de la página — no tiene sentido
+  escribir un parser a ciegas. Falta que el usuario (o una sesión con acceso a
+  internet) confirme `robots.txt` y pase una muestra de HTML real de una página de
+  resultados y una de detalle de aviso.
+- **Refactor en `runner.py`**: los defaults para crear la fila en `sources` (antes un
+  diccionario estático `_SOURCE_DEFAULTS` indexado por slug fijo) ahora los expone
+  cada adapter (`SourceAdapter.source_defaults()`) — necesario porque
+  `GreenhouseAdapter`/`LeverAdapter` tienen un slug distinto por instancia
+  (`greenhouse-stripe`, `lever-netflix`, etc.), no uno fijo por clase. Se agregó
+  también el kill-switch por fuente (`sources.enabled`, ya documentado en
+  `CLAUDE.md` pero nunca antes chequeado en código) y `ingest_all_sources()`, que
+  corre RemoteOK + todas las empresas configuradas y aísla el fallo de una fuente
+  puntual (red, HTTP, parseo) sin abortar las demás — mismo patrón que ya se usó en
+  `pipeline.py` para el enrichment.
+- **API**: nuevo `POST /jobs/ingest` (corre todas las fuentes configuradas, devuelve
+  un resumen con el detalle y error por fuente) — `POST /jobs/ingest/remoteok` se
+  mantiene para poder correr solo esa fuente puntual. El botón "Actualizar ofertas"
+  del frontend ahora pega al endpoint agregado y muestra el error de cualquier fuente
+  que haya fallado, sin ocultarlo.
+- Tests nuevos: `test_greenhouse.py`, `test_lever.py` (parseo, HTML/entidades,
+  defaults de nombre de empresa) y en `test_runner.py` (kill-switch, agregado
+  multi-fuente, aislamiento de una fuente rota). 53/53 tests backend.
+
+**Importante para el usuario — esto no está verificado contra las APIs reales**: el
+parseo de Greenhouse/Lever está escrito contra el contrato documentado de sus APIs
+públicas (estables y bien conocidas), pero este sandbox no tiene salida de red para
+probarlos contra una empresa real antes de este commit. Es muy probable que ande tal
+cual, pero hay que confirmarlo: configurar `GREENHOUSE_BOARDS`/`LEVER_COMPANIES` con
+1-2 empresas reales, correr `POST /jobs/ingest`, y si algún campo viene distinto al
+esperado (nombres de campos, formato de fecha, etc.) avisar para ajustar el parser —
+mismo proceso iterativo que se usó para ir puliendo el adapter de RemoteOK.
+
+**Pendiente de decisión del usuario**: la idea de "que los avisos sean para tu perfil"
+(matching automático contra un CV/perfil guardado, con score) es la Fase 3 del plan
+original — todavía no existe (`profiles`/`match_scores` no están implementados; el
+"perfil" de hoy es solo un texto en `localStorage` que alimenta la carta de
+presentación). Atajo disponible ya mismo sin construir nada nuevo: pegar el resumen
+del perfil/CV directamente en el campo de "Búsqueda con IA" — el embedding de esa
+búsqueda va a rankear los avisos por similitud semántica al perfil, que es
+90% del valor sin el trabajo de guardar `profiles`/`match_scores` y una pantalla de
+scoring dedicada. Falta confirmar con el usuario si igual quiere la Fase 3 completa
+(perfil guardado + score visible por aviso, sin tener que re-pegar el texto cada vez)
+más adelante.

@@ -42,6 +42,14 @@ class IngestResultOut(BaseModel):
     fetched: int
     created: int
     updated: int
+    error: str | None = None
+
+
+class IngestSummaryOut(BaseModel):
+    results: list[IngestResultOut]
+    total_fetched: int
+    total_created: int
+    total_updated: int
 
 
 class EnrichResultOut(BaseModel):

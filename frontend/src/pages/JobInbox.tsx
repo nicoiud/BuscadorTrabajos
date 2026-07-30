@@ -124,10 +124,20 @@ export function JobInbox() {
         </div>
 
         {ingestion.isSuccess && (
-          <p className="mt-2 text-xs text-slate-500">
-            {ingestion.data.fetched} ofertas procesadas ({ingestion.data.created} nuevas,{" "}
-            {ingestion.data.updated} actualizadas).
-          </p>
+          <div className="mt-2 text-xs text-slate-500">
+            <p>
+              {ingestion.data.total_fetched} ofertas procesadas de {ingestion.data.results.length}{" "}
+              fuente(s) ({ingestion.data.total_created} nuevas, {ingestion.data.total_updated}{" "}
+              actualizadas).
+            </p>
+            {ingestion.data.results
+              .filter((r) => r.error)
+              .map((r) => (
+                <p key={r.source_slug} className="text-red-600">
+                  {r.source_slug}: {r.error}
+                </p>
+              ))}
+          </div>
         )}
         {enrichment.isSuccess && (
           <p className="mt-1 text-xs text-slate-500">

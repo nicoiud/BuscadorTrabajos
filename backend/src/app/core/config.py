@@ -32,5 +32,14 @@ class Settings(BaseSettings):
     embedding_model: str = "mxbai-embed-large"
     enrichment_batch_size: int = 20
 
+    # Empresas a agregar vía las APIs públicas de Greenhouse/Lever (una por
+    # cada empresa que use esa plataforma como ATS), separadas por coma. Ej:
+    # GREENHOUSE_BOARDS=stripe,notion,airbnb
+    # LEVER_COMPANIES=netflix,figma
+    # El slug es el que aparece en la URL pública del board de esa empresa
+    # (boards.greenhouse.io/<slug> o jobs.lever.co/<slug>).
+    greenhouse_boards: str = ""
+    lever_companies: str = ""
+
 
 settings = Settings()

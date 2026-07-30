@@ -8,17 +8,34 @@ automáticamente.
 ## Estado actual
 
 MVP en construcción por fases (ver plan de arquitectura). Completas: **Fase 1**
-(ingestion de RemoteOK, almacenamiento en Postgres, búsqueda por keyword), **Fase 2**
-(normalización de avisos + embeddings + búsqueda semántica — tanto el modelo de chat
-como el de embeddings son configurables contra cualquier proveedor compatible con la
-API de OpenAI (Groq, NVIDIA API Catalog, Ollama local, etc.), ver "Variables de
-entorno"), y
+(ingestion de RemoteOK + Greenhouse + Lever, almacenamiento en Postgres, búsqueda por
+keyword — ver "Fuentes de datos" abajo), **Fase 2** (normalización de avisos +
+embeddings + búsqueda semántica — tanto el modelo de chat como el de embeddings son
+configurables contra cualquier proveedor compatible con la API de OpenAI (Groq, NVIDIA
+API Catalog, Ollama local, etc.), ver "Variables de entorno"), y
 un bloque adicional de "asistente de postulación": bandeja de puestos estilo Gmail,
 generación de cartas de presentación con IA, y una extensión de navegador (`extension/`)
 que completa formularios de postulación en cualquier sitio con tu perfil — nunca los
 envía, revisás y postulás vos. Ver `PRIMEROS_PASOS.md` para el detalle de esa parte.
-Todavía no hay autenticación, más fuentes, ni scheduler — eso llega en fases
-siguientes. Ver `PROGRESS.md` para el detalle de qué se construyó y qué falta.
+Todavía no hay autenticación ni scheduler (ingestion automática en background) — eso
+llega en fases siguientes. Ver `PROGRESS.md` para el detalle de qué se construyó y qué
+falta.
+
+## Fuentes de datos
+
+- **RemoteOK** — API pública, sin key. Trae ~100 avisos recientes por corrida (no es
+  búsqueda, es un feed fijo).
+- **Greenhouse** y **Lever** — un adapter genérico por plataforma (`GREENHOUSE_BOARDS`/
+  `LEVER_COMPANIES` en `.env`, una empresa por slug, separadas por coma). Cubre
+  muchísimas empresas que usan estas plataformas como ATS, sin scraping — son APIs
+  públicas de job board.
+- **LinkedIn — explícitamente fuera de alcance.** El ToS de LinkedIn prohíbe el
+  scraping y hay antecedentes legales (hiQ Labs v. LinkedIn). No se implementa un
+  scraper. Ver `CLAUDE.md`.
+- **ZonaJobs / Bumeran / Computrabajo** — pendiente. Requiere scraping de HTML
+  (no tienen API pública), así que antes de escribir el parser hay que revisar
+  `robots.txt` de cada sitio y tener una muestra real del HTML para no adivinar la
+  estructura.
 
 ## Arquitectura
 
@@ -56,8 +73,10 @@ pip install -e ".[dev]"
 alembic upgrade head
 uvicorn app.main:app --reload --app-dir src
 
-# 3. Traer ofertas reales de RemoteOK (en otra terminal)
-curl -X POST http://localhost:8000/api/v1/jobs/ingest/remoteok
+# 3. Traer ofertas reales — RemoteOK + las empresas de Greenhouse/Lever que hayas
+#    configurado en GREENHOUSE_BOARDS/LEVER_COMPANIES (en otra terminal)
+curl -X POST http://localhost:8000/api/v1/jobs/ingest
+# (o `POST /jobs/ingest/remoteok` para correr solo esa fuente puntual)
 
 # 4. Normalizarlas con IA (título/empresa limpios, seniority, modalidad, salario,
 #    resumen, requirements) y generar sus embeddings

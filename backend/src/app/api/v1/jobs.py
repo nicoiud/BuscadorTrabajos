@@ -11,13 +11,14 @@ from app.schemas.job import (
     CoverLetterRequest,
     EnrichResultOut,
     IngestResultOut,
+    IngestSummaryOut,
     JobPostingList,
     JobPostingOut,
 )
 from app.services.enrichment.cover_letter import generate_cover_letter
 from app.services.enrichment.pipeline import enrich_pending_jobs
 from app.services.ingestion.remoteok import RemoteOkAdapter
-from app.services.ingestion.runner import ingest_source
+from app.services.ingestion.runner import ingest_all_sources, ingest_source
 from app.services.search.filters import build_job_filters
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
@@ -67,6 +68,19 @@ async def list_jobs(
 async def trigger_remoteok_ingestion(db: AsyncSession = Depends(get_db)) -> IngestResultOut:
     result = await ingest_source(db, RemoteOkAdapter())
     return IngestResultOut(**result.__dict__)
+
+
+@router.post("/ingest", response_model=IngestSummaryOut)
+async def trigger_ingestion(db: AsyncSession = Depends(get_db)) -> IngestSummaryOut:
+    """Corre RemoteOK + todas las empresas de Greenhouse/Lever configuradas
+    (`GREENHOUSE_BOARDS`/`LEVER_COMPANIES` en `.env`)."""
+    results = await ingest_all_sources(db)
+    return IngestSummaryOut(
+        results=[IngestResultOut(**r.__dict__) for r in results],
+        total_fetched=sum(r.fetched for r in results),
+        total_created=sum(r.created for r in results),
+        total_updated=sum(r.updated for r in results),
+    )
 
 
 @router.post("/enrich", response_model=EnrichResultOut)

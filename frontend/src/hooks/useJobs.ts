@@ -5,7 +5,7 @@ import {
   generateCoverLetter,
   semanticSearchJobs,
   triggerEnrichment,
-  triggerRemoteOkIngestion,
+  triggerIngestion,
 } from "../api/jobs";
 import type { SearchPreferences } from "./usePreferences";
 
@@ -23,7 +23,7 @@ export function useJobs(query: string, mode: SearchMode, preferences: SearchPref
 export function useTriggerIngestion() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: triggerRemoteOkIngestion,
+    mutationFn: triggerIngestion,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["jobs"] });
     },

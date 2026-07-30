@@ -28,6 +28,7 @@ async def test_ingest_then_list_jobs(client, remoteok_api_fixture):
         "fetched": 2,
         "created": 2,
         "updated": 0,
+        "error": None,
     }
 
     list_response = await client.get("/api/v1/jobs")
