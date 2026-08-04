@@ -8,10 +8,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.models.job_posting import JobPosting
 from app.models.source import Source
+from app.services.ingestion.adzuna import AdzunaAdapter
+from app.services.ingestion.arbeitnow import ArbeitnowAdapter
 from app.services.ingestion.base import SourceAdapter
 from app.services.ingestion.greenhouse import GreenhouseAdapter
+from app.services.ingestion.jooble import JoobleAdapter
 from app.services.ingestion.lever import LeverAdapter
 from app.services.ingestion.remoteok import RemoteOkAdapter
+from app.services.ingestion.remotive import RemotiveAdapter
 from app.services.ingestion.weworkremotely import WeWorkRemotelyAdapter
 
 logger = logging.getLogger(__name__)
@@ -101,13 +105,31 @@ def _configured_adapters() -> list[SourceAdapter]:
     # headers para simular un browser real cruzaría la regla de CLAUDE.md de nunca
     # evadir bloqueos. El código queda por si en el futuro aparece una vía
     # legítima (ej. acuerdo de partner), pero no se corre solo.
-    adapters: list[SourceAdapter] = [RemoteOkAdapter(), WeWorkRemotelyAdapter()]
+    adapters: list[SourceAdapter] = [
+        RemoteOkAdapter(),
+        WeWorkRemotelyAdapter(),
+        ArbeitnowAdapter(),
+    ]
 
     for board in _split_csv(settings.greenhouse_boards):
         adapters.append(GreenhouseAdapter(board=board))
 
     for company in _split_csv(settings.lever_companies):
         adapters.append(LeverAdapter(company=company))
+
+    for category in _split_csv(settings.remotive_categories):
+        adapters.append(RemotiveAdapter(category=category))
+
+    # Jooble y Adzuna necesitan una API key gratuita que el usuario tiene que
+    # generar aparte (jooble.org/api/about, developer.adzuna.com) — sin key
+    # configurada, no tiene sentido intentar el request (fallaría con 401/403 en
+    # cada corrida), así que se saltan solas en vez de sumarse siempre.
+    if settings.jooble_api_key:
+        adapters.append(JoobleAdapter())
+
+    if settings.adzuna_app_id and settings.adzuna_app_key:
+        for country in _split_csv(settings.adzuna_countries):
+            adapters.append(AdzunaAdapter(country=country))
 
     return adapters
 

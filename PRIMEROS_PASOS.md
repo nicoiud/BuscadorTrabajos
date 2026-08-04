@@ -506,3 +506,71 @@ Fix, sin tocar el backend (ya soportaba paginación):
 `npx tsc --noEmit` y `npm run build` sin errores. No hizo falta tocar el backend
 (la paginación ya existía en `GET /jobs`, simplemente no se usaba desde el
 frontend).
+
+## LinkedIn vía scraping/automatización de cuenta: evaluado y descartado de nuevo
+
+El usuario preguntó varias veces por vías para sumar LinkedIn evadiendo su bloqueo a
+tráfico automatizado: headers falsos, un MCP/API propio, y puntualmente el repo
+[Agent-Reach](https://github.com/Panniantong/Agent-Reach) (automatiza sitios con
+bloqueo usando cookies de sesión + automatización de browser) usando una cuenta
+secundaria, "solo para practicar y conseguir trabajo, no va a producción". Se
+evaluó cada propuesta y se descartaron todas, incluyendo pedir modificar
+`CLAUDE.md` para habilitarlo — no por seguir la regla a rajatabla, sino porque el
+análisis de fondo no cambia con ninguna de esas variantes:
+
+- Un MCP o una API propia son solo una capa de interfaz; si adentro se sigue
+  simulando un browser para esquivar el bloqueo, es la misma evasión.
+- Agent-Reach usa cookies de sesión real + automatización de browser — su propio
+  README avisa "account ban risk, use a burner account" — eso confirma que es
+  evasión de ToS, no acceso legítimo.
+- El acceso automatizado *autenticado* (con cookies) es un caso legal distinto y
+  peor que el scraping de datos públicos de hiQ Labs v. LinkedIn: cae en "exceder
+  el acceso autorizado", con más exposición real (CFAA y equivalentes) que
+  scrapear páginas públicas sin login.
+- Cuenta secundaria y "no sale a producción" no cambian el análisis: el patrón de
+  bot igual queda asociado a una identidad real, y el riesgo práctico más
+  inmediato es perder acceso a LinkedIn justo cuando más se necesita (buscando
+  laburo activamente).
+
+Se ofrecieron dos alternativas legítimas y automáticas de verdad, ninguna
+implementada todavía (a la espera de que el usuario elija): (1) botón "Guardar
+este aviso" en la extensión de browser existente — el usuario navega LinkedIn a
+mano, un click guarda el aviso, cero automatización; (2) un `SourceAdapter` que lea
+las alertas de empleo que LinkedIn manda por email (búsquedas guardadas del propio
+usuario) vía Gmail API oficial con OAuth — es LinkedIn empujando los datos
+voluntariamente, no scraping.
+
+## Nuevas fuentes: Remotive, Arbeitnow, Jooble y Adzuna
+
+Ante la negativa de LinkedIn automatizado, el usuario pidió sumar agregadores
+legales para más cobertura de trabajos de sistemas: "sumemos esas dos nuevas que
+nombraste [Jooble y Adzuna] y todas las que encuentres". Se agregaron 4 fuentes
+nuevas siguiendo el mismo patrón `SourceAdapter` que las anteriores (I/O puro, sin
+lógica de negocio, `source_defaults()` para auto-crear el `Source`):
+
+- **Remotive** (`remotive.py`) — API JSON pública, sin key. Una instancia por
+  categoría (`REMOTIVE_CATEGORIES`, default `software-dev,devops,qa`), mismo
+  patrón "una instancia por config" que Greenhouse/Lever.
+- **Arbeitnow** (`arbeitnow.py`) — API JSON pública, sin key, orientada a
+  tech/remoto. Sin parámetros de búsqueda — se trae la página 1 tal cual (~100
+  avisos recientes), igual filosofía que RemoteOK: ingestion sin filtrar, el
+  filtrado pasa después en búsqueda/preferencias.
+- **Jooble** (`jooble.py`) — agregador con API oficial (key gratuita), la única de
+  las nuevas que sí cubre Argentina (`JOOBLE_KEYWORDS`/`JOOBLE_LOCATION`, default
+  "sistemas"/"Argentina") — pensada específicamente para llenar el hueco que
+  dejaron ZonaJobs/Bumeran bloqueados, pero por una vía con acceso legal real en
+  vez de scraping.
+- **Adzuna** (`adzuna.py`) — agregador con API oficial (`app_id`/`app_key`
+  gratuitos). Investigado y confirmado que **no cubre Argentina** (16 países
+  soportados, ninguno de Latam salvo mx/br) — sirve para roles remotos
+  internacionales o de otros países de Latam, no para el mercado local. Una
+  instancia por país en `ADZUNA_COUNTRIES` (vacío por default = deshabilitada).
+
+Jooble y Adzuna necesitan key propia del usuario (gratuitas, autogestionadas en
+jooble.org/api/about y developer.adzuna.com) — sin key configurada, `runner.py` las
+saltea solas en vez de fallar en cada corrida; Remotive/Arbeitnow funcionan out of
+the box, mismo criterio que RemoteOK/WWR. Las 4 quedan wireadas en
+`_configured_adapters()`. Tests nuevos con fixtures respx para cada adapter
+(parseo, defaults por campo faltante, y en Jooble/Adzuna que la key/query se manden
+bien en el request) más un test de integración en `test_runner.py` confirmando que
+Jooble/Adzuna solo aparecen cuando hay key configurada. 75/75 tests backend.

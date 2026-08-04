@@ -5,9 +5,13 @@ from sqlalchemy import select
 
 from app.models.job_posting import JobPosting
 from app.models.source import Source
+from app.services.ingestion.adzuna import ADZUNA_API_URL
+from app.services.ingestion.arbeitnow import ARBEITNOW_API_URL
 from app.services.ingestion.greenhouse import GREENHOUSE_API_URL
+from app.services.ingestion.jooble import JOOBLE_API_URL
 from app.services.ingestion.lever import LEVER_API_URL
 from app.services.ingestion.remoteok import REMOTEOK_API_URL, RemoteOkAdapter
+from app.services.ingestion.remotive import REMOTIVE_API_URL
 from app.services.ingestion.runner import ingest_all_sources, ingest_source
 
 _EMPTY_RSS_FEED = b"""<?xml version="1.0" encoding="UTF-8"?>
@@ -21,6 +25,17 @@ def _mock_empty_wwr_feed():
     respx.get(settings.weworkremotely_feed_urls).mock(
         return_value=Response(200, content=_EMPTY_RSS_FEED)
     )
+
+
+def _mock_empty_arbeitnow():
+    respx.get(ARBEITNOW_API_URL).mock(return_value=Response(200, json={"data": []}))
+
+
+def _mock_empty_remotive(monkeypatch):
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "remotive_categories", "software-dev")
+    respx.get(REMOTIVE_API_URL).mock(return_value=Response(200, json={"jobs": []}))
 
 
 @respx.mock
@@ -92,8 +107,12 @@ async def test_ingest_all_sources_runs_remoteok_plus_configured_companies(
 
     monkeypatch.setattr(runner_module.settings, "greenhouse_boards", "acme")
     monkeypatch.setattr(runner_module.settings, "lever_companies", "widgetco")
+    monkeypatch.setattr(runner_module.settings, "jooble_api_key", "")
+    monkeypatch.setattr(runner_module.settings, "adzuna_app_id", "")
 
     _mock_empty_wwr_feed()
+    _mock_empty_arbeitnow()
+    _mock_empty_remotive(monkeypatch)
     respx.get(REMOTEOK_API_URL).mock(return_value=Response(200, json=remoteok_api_fixture))
     respx.get(GREENHOUSE_API_URL.format(board="acme")).mock(
         return_value=Response(
@@ -125,7 +144,14 @@ async def test_ingest_all_sources_runs_remoteok_plus_configured_companies(
     results = await ingest_all_sources(db_session)
 
     slugs = {r.source_slug for r in results}
-    assert slugs == {"remoteok", "weworkremotely", "greenhouse-acme", "lever-widgetco"}
+    assert slugs == {
+        "remoteok",
+        "weworkremotely",
+        "arbeitnow",
+        "remotive-software-dev",
+        "greenhouse-acme",
+        "lever-widgetco",
+    }
     assert all(r.error is None for r in results)
 
     rows = (await db_session.execute(select(JobPosting))).scalars().all()
@@ -140,8 +166,12 @@ async def test_ingest_all_sources_isolates_a_failing_source(
 
     monkeypatch.setattr(runner_module.settings, "greenhouse_boards", "broken-board")
     monkeypatch.setattr(runner_module.settings, "lever_companies", "")
+    monkeypatch.setattr(runner_module.settings, "jooble_api_key", "")
+    monkeypatch.setattr(runner_module.settings, "adzuna_app_id", "")
 
     _mock_empty_wwr_feed()
+    _mock_empty_arbeitnow()
+    _mock_empty_remotive(monkeypatch)
     respx.get(REMOTEOK_API_URL).mock(return_value=Response(200, json=remoteok_api_fixture))
     respx.get(GREENHOUSE_API_URL.format(board="broken-board")).mock(
         side_effect=httpx.ConnectError("simulated network failure")
@@ -156,3 +186,33 @@ async def test_ingest_all_sources_isolates_a_failing_source(
 
     rows = (await db_session.execute(select(JobPosting))).scalars().all()
     assert len(rows) == 2  # el fallo de greenhouse no perdió lo que sí entró de remoteok
+
+
+@respx.mock
+async def test_ingest_all_sources_adds_jooble_and_adzuna_only_when_keys_configured(
+    db_session, remoteok_api_fixture, monkeypatch
+):
+    from app.services.ingestion import runner as runner_module
+
+    monkeypatch.setattr(runner_module.settings, "greenhouse_boards", "")
+    monkeypatch.setattr(runner_module.settings, "lever_companies", "")
+    monkeypatch.setattr(runner_module.settings, "jooble_api_key", "test-key")
+    monkeypatch.setattr(runner_module.settings, "adzuna_app_id", "app-id")
+    monkeypatch.setattr(runner_module.settings, "adzuna_app_key", "app-key")
+    monkeypatch.setattr(runner_module.settings, "adzuna_countries", "gb,mx")
+
+    _mock_empty_wwr_feed()
+    _mock_empty_arbeitnow()
+    _mock_empty_remotive(monkeypatch)
+    respx.get(REMOTEOK_API_URL).mock(return_value=Response(200, json=remoteok_api_fixture))
+    respx.post(JOOBLE_API_URL.format(key="test-key")).mock(
+        return_value=Response(200, json={"jobs": []})
+    )
+    respx.get(ADZUNA_API_URL.format(country="gb")).mock(return_value=Response(200, json={"results": []}))
+    respx.get(ADZUNA_API_URL.format(country="mx")).mock(return_value=Response(200, json={"results": []}))
+
+    results = await ingest_all_sources(db_session)
+
+    slugs = {r.source_slug for r in results}
+    assert {"jooble", "adzuna-gb", "adzuna-mx"} <= slugs
+    assert all(r.error is None for r in results)

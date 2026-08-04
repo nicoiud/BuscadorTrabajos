@@ -31,6 +31,21 @@ falta.
   públicas de job board.
 - **We Work Remotely** — feeds RSS por categoría (`WEWORKREMOTELY_FEED_URLS` en
   `.env`, separados por coma). Pensado para agregadores, no scraping.
+- **Remotive** — API pública, sin key. Foco en tech (`REMOTIVE_CATEGORIES` en
+  `.env`, default `software-dev,devops,qa`).
+- **Arbeitnow** — API pública, sin key, orientada a tech/remoto. Sin configuración
+  necesaria.
+- **Jooble** — agregador con API oficial (key gratuita en
+  [jooble.org/api/about](https://jooble.org/api/about)) que sí cubre Argentina, a
+  diferencia de Adzuna — pensado para llenar el hueco que dejan ZonaJobs/Bumeran
+  bloqueados. `JOOBLE_API_KEY`/`JOOBLE_KEYWORDS`/`JOOBLE_LOCATION` en `.env`; sin
+  key, se salta sola.
+- **Adzuna** — agregador con API oficial (`app_id`/`app_key` gratuitos en
+  [developer.adzuna.com](https://developer.adzuna.com)). **No cubre Argentina**
+  (países soportados: gb, us, de, fr, nl, ca, au, in, br, pl, za, ru, sg, mx, it,
+  at) — sirve para roles remotos internacionales o de mx/br. `ADZUNA_APP_ID`/
+  `ADZUNA_APP_KEY`/`ADZUNA_COUNTRIES`/`ADZUNA_QUERY` en `.env`; sin key o sin
+  países configurados, se salta sola.
 - **LinkedIn — explícitamente fuera de alcance.** El ToS de LinkedIn prohíbe el
   scraping y hay antecedentes legales (hiQ Labs v. LinkedIn). No se implementa un
   scraper. Ver `CLAUDE.md`.

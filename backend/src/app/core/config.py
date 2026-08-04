@@ -50,5 +50,33 @@ class Settings(BaseSettings):
         "https://weworkremotely.com/categories/remote-programming-jobs.rss"
     )
 
+    # Remotive (https://remotive.com) — API JSON pública, sin key. Categorías a
+    # traer, separadas por coma (una request por categoría). Default: las más
+    # relevantes para roles de sistemas/IT.
+    remotive_categories: str = "software-dev,devops,qa"
+
+    # Arbeitnow (https://arbeitnow.com) — API JSON pública, sin key, orientada a
+    # tech/remoto. No tiene parámetro de categoría; se trae la primera página
+    # (100 avisos más recientes) tal cual.
+
+    # Jooble (https://jooble.org/api/about) — agregador con acceso legal a avisos de
+    # portales locales (incluye Argentina, a diferencia de Adzuna) vía API key
+    # gratuita. Sin key configurada, esta fuente se salta sola (ver
+    # `_configured_adapters` en runner.py) — el resto del sistema sigue funcionando
+    # igual.
+    jooble_api_key: str = ""
+    jooble_keywords: str = "sistemas"
+    jooble_location: str = "Argentina"
+
+    # Adzuna (https://developer.adzuna.com) — agregador con API gratuita (app_id +
+    # app_key). Ojo: Adzuna NO cubre Argentina (países soportados: gb, us, de, fr,
+    # nl, ca, au, in, br, pl, za, ru, sg, mx, it, at) — sirve para roles remotos
+    # internacionales o de otros países de Latam (mx, br), no para el mercado local.
+    # `ADZUNA_COUNTRIES` vacío = fuente deshabilitada (igual que Jooble sin key).
+    adzuna_app_id: str = ""
+    adzuna_app_key: str = ""
+    adzuna_countries: str = ""
+    adzuna_query: str = "software developer OR programmer OR IT"
+
 
 settings = Settings()
